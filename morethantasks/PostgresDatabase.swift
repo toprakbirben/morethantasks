@@ -37,7 +37,6 @@ class PostgresDatabase {
             
             for row in cursor {
                 let columns = try row.get().columns
-        
                 guard let idString = try? columns[0].string(),
                           let id = UUID(uuidString: idString) else {
                         continue
