@@ -9,9 +9,13 @@ import SwiftUI
 
 @main
 struct morethantasksApp: App {
+    
+    @State private var selectedTab: UIComponents.Tab = .home
+    @State private var notes: [Notes] = []
+    
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView(selectedTab: $selectedTab, notes: $notes)
         }
     }
 }
