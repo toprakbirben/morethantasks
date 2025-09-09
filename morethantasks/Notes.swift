@@ -7,15 +7,15 @@
 
 import Foundation
 
-
 struct Notes: Identifiable, Codable {
     let id: UUID
-    let title: String
-    let body: String
-    let parentId: UUID?
+    var title: String
+    var body: String
+    var parentId: UUID?
     var children: [Notes] = []
     var lastUpdated: Date
     var createdByUserId: String
+    var colorHex: String?
     
     static let databaseTableName = "notes"
 }

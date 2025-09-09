@@ -9,7 +9,21 @@ import SwiftUI
 
 struct testview: View {
     var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+        HStack {
+            Button(action: {
+                // action here
+            }) {
+                Text("Close Modal")
+                    .foregroundColor(.white)
+                    .font(.headline)
+                    .padding()
+                    .background(Color.blue)
+                    .cornerRadius(26)
+                    .padding(50)
+                    .shadow(color: Color.gray.opacity(0.4), radius: 8)
+            }
+        }
+        .frame(alignment: .topLeading)
     }
 }
 

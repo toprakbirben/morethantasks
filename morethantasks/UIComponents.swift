@@ -89,6 +89,42 @@ struct UIComponents {
                 .padding()
             }
     }
+    
+    struct RecentNotes: View {
+        let note: Notes
+        let widthOfNote : CGFloat
+        let heightOfNote : CGFloat
+        var body : some View {
+            ZStack{
+                Rectangle()
+                    .frame(width:widthOfNote, height: heightOfNote)
+                    .foregroundColor(Color(hex: note.colorHex ?? "#007BFF")?.opacity(0.8) ?? Color.blue.opacity(0.8))
+                    .cornerRadius(10)
+                    .opacity(0.60)
+                    .overlay(alignment: .bottom) {
+                        Text(note.title)
+                            .padding()
+                            .frame(width:widthOfNote, height: heightOfNote/2, alignment: .bottomLeading)
+                            .background(Color(hex: note.colorHex ?? "#007BFF")?.opacity(0.8) ?? Color.blue.opacity(0.8))
+                            .cornerRadius(10)
+                            .opacity(0.80)
+                    }
+            }
+        }
+        
+    }
+    
+    struct NoteCell : View {
+        let note : Notes
+        var body: some View {
+            Text(note.title)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+                .background(Color(hex: note.colorHex ?? "#007BFF")?.opacity(0.8) ?? Color.blue.opacity(0.8))
+                .cornerRadius(10)
+            
+        }
+    }
 }
 
 

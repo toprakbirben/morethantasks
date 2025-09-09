@@ -30,7 +30,8 @@ class PostgresDatabase {
             let connection = try PostgresClientKit.Connection(configuration: configuration)
             defer { connection.close() }
             
-            let text = "SELECT id, title, body, parent_id, last_updated, created_by_user_id FROM notes"
+            let text = "SELECT id, title, body, parent_id, last_updated, created_by_user_id, color FROM notes"
+
             let statement = try connection.prepareStatement(text: text)
             let cursor = try statement.execute()
             defer{ cursor.close() }
@@ -53,15 +54,17 @@ class PostgresDatabase {
                 let lastUpdated = try columns[4].timestamp().date(in: .current)
                 let createdByUserId = try columns[5].string()
                 
+                let colorHex = try? columns[6].string()
                 let note = Notes(
-                        id: id,
-                        title: title,
-                        body: body,
-                        parentId: parentId,
-                        children: children,
-                        lastUpdated: lastUpdated,
-                        createdByUserId: createdByUserId
-                    )
+                    id: id,
+                    title: title,
+                    body: body,
+                    parentId: parentId,
+                    children: children,
+                    lastUpdated: lastUpdated,
+                    createdByUserId: createdByUserId,
+                    colorHex: colorHex
+                )
                 notes.append(note)
             }
         } catch {
@@ -93,4 +96,5 @@ class PostgresDatabase {
                 lhs.lastUpdated > rhs.lastUpdated
         }
     }
+
 }
