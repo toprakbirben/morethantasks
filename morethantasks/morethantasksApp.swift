@@ -12,6 +12,7 @@ struct morethantasksApp: App {
     
     @State private var selectedTab: UIComponents.Tab = .home
     @State private var notes: [Notes] = []
+    @StateObject private var dbManager = DatabaseManager.shared
     
     var body: some Scene {
         WindowGroup {

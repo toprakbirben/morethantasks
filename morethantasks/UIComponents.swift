@@ -55,40 +55,40 @@ struct UIComponents {
     }
     
     struct SearchBar: View {
-        @State private var searchText: String = ""
+        @Binding var searchText: String
         
         var body: some View {
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.black)
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.black)
 
-                    TextField("Zoek", text: $searchText)
-                        .foregroundColor(.black)
+                TextField("Zoek", text: $searchText)
+                    .foregroundColor(.black)
 
-                    if !searchText.isEmpty {
-                        Button(action: {
-                            searchText = ""
-                        }) {
-                            Image(systemName: "xmark")
-                                .foregroundColor(.black)
-                        }
+                if !searchText.isEmpty {
+                    Button(action: {
+                        searchText = ""
+                    }) {
+                        Image(systemName: "xmark")
+                            .foregroundColor(.black)
                     }
-                    else {
-                        Button(action: {
-                            
-                        }) {
-                            Image(systemName:"person.crop.circle")
-                                .foregroundColor(.black)
-                        }
+                } else {
+                    Button(action: {
+                        // profile action
+                    }) {
+                        Image(systemName: "person.crop.circle")
+                            .foregroundColor(.black)
                     }
                 }
-                .padding(.horizontal, 16.0)
-                .padding(.vertical, 10.0)
-                .background(Color(white: 0.9))
-                .cornerRadius(40.0)
-                .padding()
             }
+            .padding(.horizontal, 16.0)
+            .padding(.vertical, 10.0)
+            .background(Color(white: 0.9))
+            .cornerRadius(40.0)
+            .padding()
+        }
     }
+
     
     struct RecentNotes: View {
         let note: Notes
@@ -118,6 +118,7 @@ struct UIComponents {
         let note : Notes
         var body: some View {
             Text(note.title)
+                .foregroundColor(.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding()
                 .background(Color(hex: note.colorHex ?? "#007BFF")?.opacity(0.8) ?? Color.blue.opacity(0.8))

@@ -4,46 +4,48 @@
 //
 //  Created by Toprak Birben on 25/08/2025.
 //
+
 import SwiftUI
 import Combine
 
 struct NoteView: View {
     @Binding var selectedTab: UIComponents.Tab
-    @State private var tree: [Notes] = []
     @State private var notes: [Notes] = []
+    @State private var searchText: String = ""
 
     var body: some View {
         NavigationStack {
             ZStack {
-                VStack {
-                    UIComponents.SearchBar()
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        RecentNoteView(notes: notes)
-                    }.fixedSize(horizontal: false, vertical: true)
-                    NoteListView(notes: $notes, onRefresh: refreshNotes)
-                    HStack {
-                        Spacer()
-                        NoteAdd() {
-                            refreshNotes()
-                        }.background(.regularMaterial)
-                    }.padding()
+                GeometryReader { geometry in
+                    VStack {
+                        UIComponents.SearchBar(searchText: $searchText)
+                        
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            RecentNoteView(notes: notes)
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                        
+                        NoteListView(notes: $notes, onRefresh: refreshNotes)
+                        .padding()
+                    }
+                    .onAppear {
+                        refreshNotes()
+                    }
+                    NoteAdd {
+                        refreshNotes()
+                    }.frame(width: 80, height: 80).position(x: geometry.size.width - 60, y: geometry.size.height - 60)
                 }
-                
-            }
-            .onAppear {
-                refreshNotes()
             }
         }
-        
     }
     
     private func refreshNotes() {
-        notes = PostgresDatabase.shared.fetchNotes()
-        tree = PostgresDatabase.buildNoteTree(from: notes)
-        //tree = PostgresDatabase.buildTreeHierarchy(from: notes)
+        DatabaseManager.shared.fetchNotes()
+        notes = DatabaseManager.shared.getNotes()
     }
 }
 
+// MARK: - Recent Notes Horizontal View
 struct RecentNoteView: View {
     let notes: [Notes]
     
@@ -59,22 +61,20 @@ struct RecentNoteView: View {
                 LazyHStack(spacing: 20) {
                     ForEach(notes, id: \.id) { note in
                         NavigationLink(
-                            destination: NoteDetailView(note: note) { updatedText, updatedTitle in editNote(
-                                noteId: note.id.uuidString,
-                                title: updatedTitle,
-                                noteBody: updatedText,
-                                noteParent: note.parentId?.uuidString ?? nil,
-                                noteColor: note.colorHex
-                            ) {
-                                print("Note updated")
+                            destination: NoteDetailView(note: note) { updatedTitle, updatedText in
+                                var updatedNote = note
+                                updatedNote.title = updatedTitle
+                                updatedNote.body = updatedText
+                                DatabaseManager.shared.update(note: updatedNote)
                             }
-                            })
-                        {
+                        ) {
                             UIComponents.RecentNotes(
                                 note: note,
                                 widthOfNote: 100,
-                                heightOfNote: 100)
-                        }.buttonStyle(PlainButtonStyle())
+                                heightOfNote: 100
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
                 }
             }
@@ -84,25 +84,23 @@ struct RecentNoteView: View {
     }
 }
 
+// MARK: - Note List View
 struct NoteListView: View {
     @Binding var notes: [Notes]
     @State var showModal: Bool = false
     @State private var selectedNote: Notes? = nil
-
     var onRefresh: (() -> Void)?
 
     var body: some View {
         List {
             ForEach(notes) { note in
                 NavigationLink(
-                    destination: NoteDetailView(note: note) { updatedText, updatedTitle in editNote(
-                        noteId: note.id.uuidString,
-                        title: updatedTitle,
-                        noteBody: updatedText,
-                        noteParent: note.parentId?.uuidString ?? nil,
-                        noteColor: note.colorHex
-                    ) {
-                    }
+                    destination: NoteDetailView(note: note) { updatedTitle, updatedText in
+                        var updatedNote = note
+                        updatedNote.title = updatedTitle
+                        updatedNote.body = updatedText
+                        DatabaseManager.shared.update(note: updatedNote)
+                        onRefresh?()
                     }
                 ) {
                     UIComponents.NoteCell(note: note)
@@ -111,14 +109,12 @@ struct NoteListView: View {
                 .listRowSeparator(.hidden)
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) {
-                        deleteNote(noteId: note.id.uuidString) {
-                            onRefresh?()
-                        }
+                        DatabaseManager.shared.delete(noteId: note.id)
+                        onRefresh?()
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
-                    Button
-                    {
+                    Button {
                         showModal = true
                         selectedNote = note
                     } label: {
@@ -139,13 +135,7 @@ struct NoteListView: View {
     }
 }
 
-
-struct NoteRow: View {
-    var body: some View {
-    }
-}
-
-
+// MARK: - Modal Preferences
 struct ModalPreference: View {
     @Binding var note: Notes
     let allNotes: [Notes]
@@ -162,16 +152,7 @@ struct ModalPreference: View {
                         get: { note.colorHex ?? "#007BFF" },
                         set: { newColor in
                             note.colorHex = newColor
-                            DispatchQueue.main.async {
-                                editNote(
-                                    noteId: note.id.uuidString,
-                                    title: note.title,
-                                    noteBody: note.body,
-                                    noteParent: note.parentId?.uuidString,
-                                    noteColor: newColor
-                                ) { print("✅ note color updated")
-                                    print("color \(newColor)")}
-                            }
+                            DatabaseManager.shared.update(note: note)
                         }
                     )) {
                         Text("Blue").tag("#007BFF")
@@ -187,15 +168,7 @@ struct ModalPreference: View {
                         get: { note.parentId },
                         set: { newParentId in
                             note.parentId = newParentId
-                            DispatchQueue.main.async {
-                                editNote(
-                                    noteId: note.id.uuidString,
-                                    title: note.title,
-                                    noteBody: note.body,
-                                    noteParent: newParentId?.uuidString,
-                                    noteColor: note.colorHex
-                                ) { print("✅ parent updated") }
-                            }
+                            DatabaseManager.shared.update(note: note)
                         }
                     )) {
                         Text("None").tag(UUID?.none)
@@ -210,28 +183,18 @@ struct ModalPreference: View {
     }
 }
 
-
-///
-///It becomes lowercase when caps lock is on I dont know why it behaves like that
-///as of 9/9/2025 this no longer is the case 
-///
-
+// MARK: - Note Detail View
 struct NoteDetailView: View {
     let note: Notes
     @State var title: String
     @State var text: String
-    @State private var didAppear = false
     
-    private let originalTitle: String
-    private let originalText: String
     var onSave: ((String, String) -> Void)?
 
     init(note: Notes, onSave: ((String, String) -> Void)? = nil) {
         self.note = note
         _title = State(initialValue: note.title)
         _text = State(initialValue: note.body)
-        self.originalTitle = note.title
-        self.originalText = note.body
         self.onSave = onSave
     }
 
@@ -241,27 +204,19 @@ struct NoteDetailView: View {
                 TextField("Title", text: $title)
                     .font(.largeTitle)
                     .textInputAutocapitalization(.never)
-                    .onChange(of: title) {oldValue, newValue in
-                        if !newValue.isEmpty {
-                            editNote(noteId: note.id.uuidString, title: newValue, noteBody: text, noteParent: note.parentId?.uuidString, noteColor: note.colorHex) {
-                            }
-                        }
+                    .onChange(of: title) { oldValue, newValue in
+                        onSave?(newValue, text)
                     }
                     .bold()
+                
                 Divider()
-                HStack{
-                }
+                
                 TextEditor(text: $text)
                     .textInputAutocapitalization(.never)
-                    .frame(minHeight: 500) //should stay as it is right now
-                    .fixedSize(horizontal: false, vertical: false)
+                    .frame(minHeight: 500)
                     .padding()
-                    .onChange(of: text) {oldValue, newValue in
-                        if !newValue.isEmpty {
-                            editNote(noteId: note.id.uuidString, title: title, noteBody: newValue, noteParent: note.parentId?.uuidString, noteColor: note.colorHex) {
-                            }
-                        }
-                        
+                    .onChange(of: text) { oldValue, newValue in
+                        onSave?(title, newValue)
                     }
             }
             .padding()
@@ -269,10 +224,9 @@ struct NoteDetailView: View {
         .navigationTitle(title.isEmpty ? "Untitled" : title)
         .navigationBarTitleDisplayMode(.inline)
     }
-
 }
 
-
+// MARK: - Add Note Button
 struct NoteAdd: View {
     @State private var showNoteCreation = false
     var onNoteAdded: (() -> Void)?
@@ -282,21 +236,30 @@ struct NoteAdd: View {
             Button {
                 showNoteCreation = true
             } label: {
-                Image(systemName: "plus.app.fill")
+                Image(systemName: "plus.circle.fill")
                     .font(.system(size: 40))
             }
             .fullScreenCover(isPresented: $showNoteCreation) {
                 NoteCreationView { title, body in
-                    addNote(title: title, noteBody: body) {
-                        onNoteAdded?()
-                    }
+                    let note = Notes(
+                        id: UUID(),
+                        title: title,
+                        body: body,
+                        parentId: nil,
+                        children: [],
+                        lastUpdated: Date(),
+                        createdByUserId: "toprak",
+                        colorHex: "#007BFF"
+                    )
+                    DatabaseManager.shared.insert(note: note)
+                    onNoteAdded?()
                 }
-                    
             }
         }
     }
 }
 
+// MARK: - Note Creation View
 struct NoteCreationView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var text: String = ""
@@ -318,9 +281,9 @@ struct NoteCreationView: View {
                         .font(.headline)
                 }
                 Spacer()
-                
             }
             .padding()
+            
             TextEditor(text: $text)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled(true)
@@ -331,100 +294,6 @@ struct NoteCreationView: View {
         }
     }
 }
-
-
-func deleteNote(noteId: String, completion: @escaping () -> Void) {
-    guard let url = URL(string: "http://192.168.178.187:8000/remove_note") else { return }
-    
-    let noteData: [String: Any] = ["note_id": noteId]
-    
-    guard let jsonData = try? JSONSerialization.data(withJSONObject: noteData) else { return }
-    
-    var request = URLRequest(url: url)
-    request.httpMethod = "DELETE"
-    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.httpBody = jsonData
-    
-    URLSession.shared.dataTask(with: request) { data, response, error in
-        if let error = error {
-            print("Error deleting note:", error)
-            return
-        }
-        
-        if let data = data {
-            if let responseJSON = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                print("Delete response:", responseJSON)
-            }
-        }
-        
-        DispatchQueue.main.async {
-            completion()
-        }
-    }.resume()
-}
-
-func addNote(title: String, noteBody: String, completion: @escaping () -> Void) {
-    guard let url = URL(string: "http://192.168.178.187:8000/add_note") else { return }
-    
-    let noteData: [String: Any] = [
-        "title": title,
-        "body": noteBody,
-        "created_by_user_id": "toprak"
-    ]
-    
-    guard let jsonData = try? JSONSerialization.data(withJSONObject: noteData) else { return }
-    
-    var request = URLRequest(url: url)
-    request.httpMethod = "POST"
-    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.httpBody = jsonData
-    
-    URLSession.shared.dataTask(with: request) { data, response, error in
-        if let error = error {
-            print("Error adding note:", error)
-        } else {
-            print("Note added successfully")
-            DispatchQueue.main.async {
-                completion()
-            }
-        }
-    }.resume()
-}
-
-func editNote(noteId: String, title: String?, noteBody: String?, noteParent: String?, noteColor: String?, completion: @escaping () -> Void) {
-    guard let url = URL(string: "http://192.168.178.187:8000/edit_note") else { return }
-
-    var request = URLRequest(url: url)
-    request.httpMethod = "PATCH"
-    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-    var body: [String: Any] = ["note_id": noteId]
-    if let title = title {
-        body["title"] = title
-    }
-    if let noteBody = noteBody {
-        body["body"] = noteBody
-    }
-    if let noteParent = noteParent {
-        body["parent_id"] = noteParent
-    }
-    if let noteColor = noteColor {
-        body["color"] = noteColor
-    }
-    request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
-    URLSession.shared.dataTask(with: request) { _, response, error in
-        if let error = error {
-            print("Error editing note: \(error.localizedDescription)")
-            return
-        }
-
-        DispatchQueue.main.async {
-            completion()
-        }
-    }.resume()
-}
-
 
 struct NoteView_Previews: PreviewProvider {
     static var previews: some View {

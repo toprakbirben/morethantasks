@@ -21,12 +21,11 @@ struct RootView: View {
             case .notes:
                 AnyView(NoteView(selectedTab: $selectedTab))
             case .calendar:
-                AnyView(Calendar(selectedTab: $selectedTab))
+                AnyView(CalendarPage(selectedTab: $selectedTab))
             @unknown default:
                 AnyView(EmptyView())
             }
 
-            // Bottom task bar
             UIComponents.TaskBar(selectedTab: $selectedTab)
         }
     }

@@ -7,12 +7,13 @@
 
 import Foundation
 import PostgresClientKit
+import Combine
 
-class PostgresDatabase {
-    
+class PostgresDatabase: DatabaseProvider {
+
     static let shared = PostgresDatabase()
     private var configuration: PostgresClientKit.ConnectionConfiguration
-    
+
     init() {
         configuration = PostgresClientKit.ConnectionConfiguration()
         configuration.host = "192.168.178.187"
@@ -22,79 +23,125 @@ class PostgresDatabase {
         configuration.credential = .scramSHA256(password: "notes")
         configuration.ssl = false
     }
-    
-    // Fetch all notes
+
+    // MARK: - Fetch
     func fetchNotes() -> [Notes] {
         var notes: [Notes] = []
         do {
             let connection = try PostgresClientKit.Connection(configuration: configuration)
             defer { connection.close() }
-            
-            let text = "SELECT id, title, body, parent_id, last_updated, created_by_user_id, color FROM notes"
 
+            let text = "SELECT * FROM notes"
             let statement = try connection.prepareStatement(text: text)
             let cursor = try statement.execute()
-            defer{ cursor.close() }
-            
+            defer { cursor.close() }
+
             for row in cursor {
                 let columns = try row.get().columns
                 guard let idString = try? columns[0].string(),
-                          let id = UUID(uuidString: idString) else {
-                        continue
-                    }
-                let title: String = try columns[1].string()
-                let body: String = try columns[2].string()
-                let parentId: UUID?
-                if let parentString = try? columns[3].string(), !parentString.isEmpty {
-                    parentId = UUID(uuidString: parentString)
-                } else {
-                    parentId = nil
-                }
-                let children : [Notes] = []
+                      let id = UUID(uuidString: idString) else { continue }
+
+                let title = try columns[1].string()
+                let body = try columns[2].string()
+                let parentIdString = try? columns[3].string()
+                let parentId = parentIdString.flatMap { UUID(uuidString: $0) }
                 let lastUpdated = try columns[4].timestamp().date(in: .current)
                 let createdByUserId = try columns[5].string()
-                
-                let colorHex = try? columns[6].string()
-                let note = Notes(
+                let color = try? columns[6].string()
+
+                notes.append(Notes(
                     id: id,
                     title: title,
                     body: body,
                     parentId: parentId,
-                    children: children,
+                    children: [],
                     lastUpdated: lastUpdated,
                     createdByUserId: createdByUserId,
-                    colorHex: colorHex
-                )
-                notes.append(note)
+                    colorHex: color
+                ))
             }
         } catch {
-            print("Postgres error: \(error)")
+            print("Postgres fetch error:", error)
         }
         return notes
     }
-    
-    static func buildNoteTree(from notes: [Notes]) -> [Notes] {
-        var lookup: [UUID: Notes] = [:]
-        var roots: [Notes] = []
-        
-        for note in notes {
-            lookup[note.id] = note
-        }
-        
-        for note in notes {
-            if let parentId = note.parentId {
-                lookup[parentId]?.children.append(note)
+
+    // MARK: - Insert
+    func insert(title: String, noteBody: String, completion: @escaping () -> Void) {
+        guard let url = URL(string: "http://192.168.178.187:8000/add_note") else { return }
+        let noteData: [String: Any] = [
+            "title": title,
+            "body": noteBody,
+            "created_by_user_id": "toprak"
+        ]
+
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: noteData) else { return }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = jsonData
+
+        URLSession.shared.dataTask(with: request) { _, _, error in
+            if let error = error {
+                print("Postgres insert error:", error)
             } else {
-                roots.append(note)
+                print("✅ Note added to Postgres")
+                DispatchQueue.main.async { completion() }
             }
-        }
-        return roots
-    }
-    
-    static func sortRecentNotes( notes: [Notes]) -> [Notes] {
-        return notes.sorted { lhs, rhs in
-                lhs.lastUpdated > rhs.lastUpdated
-        }
+        }.resume()
     }
 
+    // MARK: - Update
+    func update(noteId: String,
+                title: String?,
+                noteBody: String?,
+                noteParent: String?,
+                noteColor: String?,
+                completion: @escaping () -> Void) {
+
+        guard let url = URL(string: "http://192.168.178.187:8000/edit_note") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        var body: [String: Any] = ["note_id": noteId]
+        if let title = title { body["title"] = title }
+        if let noteBody = noteBody { body["body"] = noteBody }
+        if let noteParent = noteParent { body["parent_id"] = noteParent }
+        if let noteColor = noteColor { body["color"] = noteColor }
+
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        URLSession.shared.dataTask(with: request) { _, _, error in
+            if let error = error {
+                print("Postgres update error:", error)
+            } else {
+                print("✅ Note updated in Postgres")
+                DispatchQueue.main.async { completion() }
+            }
+        }.resume()
+    }
+
+    // MARK: - Delete
+    func delete(noteId: UUID, completion: @escaping () -> Void) {
+        guard let url = URL(string: "http://192.168.178.187:8000/remove_note") else { return }
+        let noteData: [String: Any] = ["note_id": noteId.uuidString]
+
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: noteData) else { return }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = jsonData
+
+        URLSession.shared.dataTask(with: request) { _, _, error in
+            if let error = error {
+                print("Postgres delete error:", error)
+            } else {
+                print("✅ Note deleted from Postgres")
+                DispatchQueue.main.async { completion() }
+            }
+        }.resume()
+    }
 }
