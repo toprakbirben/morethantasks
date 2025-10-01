@@ -49,6 +49,10 @@ class DatabaseManager: ObservableObject {
         monitor.cancel()
     }
     
+    func syncNotes() {
+        
+    }
+    
     func fetchNotes() {
         let fetchedNotes = activeDatabase.fetchNotes()
             for note in fetchedNotes {
