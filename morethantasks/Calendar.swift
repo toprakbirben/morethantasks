@@ -5,6 +5,7 @@
 //  Created by Toprak Birben on 06/05/2025.
 //
 import SwiftUI
+import Foundation
 
 struct CalendarPage: View {
     @Binding var selectedTab: UIComponents.Tab
@@ -28,16 +29,16 @@ struct CalendarPage: View {
 
 struct CalendarView: View {
     @State private var selectedDate: Date = Date()
+    @State private var swipeDirection: Edge = .trailing
     let events: [Event]
     
-    // Group events by start-of-day
     private var groupedEvents: [Date: [Event]] {
         Dictionary(grouping: events) { Calendar.current.startOfDay(for: $0.startDate) }
     }
     
     var body: some View {
         VStack {
-            MonthHeaderView(selectedDate: selectedDate)
+            MonthHeaderView(selectedDate: $selectedDate, swipeDirection: $swipeDirection)
             WeekdayHeaderView()
             
             DaysGridView(selectedDate: $selectedDate, events: groupedEvents)
@@ -46,13 +47,17 @@ struct CalendarView: View {
             
             EventListView(selectedDate: selectedDate, events: groupedEvents)
         }
+            .id(selectedDate)  // whole calendar keyed by date
+            .transition(.move(edge: swipeDirection).combined(with: .opacity))
+            .animation(.easeInOut(duration: 0.3), value: selectedDate)
     }
 }
 
 // MARK: - Subviews
 
 struct MonthHeaderView: View {
-    var selectedDate: Date
+    @Binding var selectedDate: Date
+    @Binding var swipeDirection: Edge
     
     var body: some View {
         Text(Helper.shared.monthYearString(for: selectedDate))
@@ -61,6 +66,8 @@ struct MonthHeaderView: View {
             .padding(.horizontal)
     }
 }
+
+
 
 struct WeekdayHeaderView: View {
     var body: some View {
@@ -78,6 +85,7 @@ struct WeekdayHeaderView: View {
 struct DaysGridView: View {
     @Binding var selectedDate: Date
     let events: [Date: [Event]]
+
     
     var body: some View {
         let days = Helper.shared.generateDays(for: selectedDate)
@@ -87,10 +95,10 @@ struct DaysGridView: View {
                 if let date = date {
                     VStack(spacing: 4) {
                         Text("\(Calendar.current.component(.day, from: date))")
-                            .frame(width: 28, height: 28)
+                            .frame(width: 28, height: 28, alignment: .center)
                             .background(Helper.shared.isSameDay(date, selectedDate) ? Color.green : Color.clear)
                             .clipShape(Circle())
-                            .foregroundColor(Helper.shared.isSameDay(date, selectedDate) ? .white : .black)
+                            .foregroundColor(Helper.shared.isSameDay(date, selectedDate) ? .white : .primary)
                             .onTapGesture {
                                 selectedDate = date
                             }
@@ -98,7 +106,7 @@ struct DaysGridView: View {
                         // Event indicator
                         if let dayEvents = events[Calendar.current.startOfDay(for: date)], !dayEvents.isEmpty {
                             Circle()
-                                .fill(Color.black)
+                                .fill(.primary)
                                 .frame(width: 6, height: 6)
                         } else {
                             Circle()
@@ -119,6 +127,7 @@ struct DaysGridView: View {
 struct EventListView: View {
     let selectedDate: Date
     let events: [Date: [Event]]
+
     
     var body: some View {
         ScrollView {
@@ -127,15 +136,16 @@ struct EventListView: View {
                     ForEach(todaysEvents) { event in
                         RoundedRectangle(cornerRadius: 12)
                             .frame(height: 60)
-                            .background(Color(hex: event.colorHex ?? "#007BFF")?.opacity(0.8) ?? Color.blue.opacity(0.8))
+                            .background(.black)
                             .overlay(
                                 VStack(alignment: .leading) {
                                     Text(event.title)
                                         .font(.headline)
-                                        .foregroundColor(.white)
+                                        .foregroundColor(.black)
                                     Text(event.allDay ? "All day" : "Time TBD")
                                         .font(.caption)
-                                        .foregroundColor(.white.opacity(0.8))
+                                        .foregroundColor(.black.opacity(0.8))
+                                        
                                 }
                                 .padding(.leading, 8)
                                 
