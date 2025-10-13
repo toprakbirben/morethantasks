@@ -12,7 +12,7 @@ struct NoteView: View {
     @Binding var selectedTab: UIComponents.Tab
     @State private var notes: [Notes] = []
     @State private var searchText: String = ""
-
+    @State private var existingTags: [String] = []
     var body: some View {
         NavigationStack {
             ZStack {
@@ -25,7 +25,7 @@ struct NoteView: View {
                         }
                         .fixedSize(horizontal: false, vertical: true)
                         
-                        NoteListView(notes: $notes, onRefresh: refreshNotes)
+                        NoteListView(notes: $notes, existingTags: $existingTags, onRefresh: refreshNotes)
                         .padding()
                     }
                     .onAppear {
@@ -42,6 +42,9 @@ struct NoteView: View {
     private func refreshNotes() {
         DatabaseManager.shared.fetchNotes()
         notes = DatabaseManager.shared.getNotes()
+        
+        DatabaseManager.shared.fetchTags()
+        existingTags = DatabaseManager.shared.getTags()
     }
 }
 
@@ -89,36 +92,41 @@ struct NoteListView: View {
     @Binding var notes: [Notes]
     @State var showModal: Bool = false
     @State private var selectedNote: Notes? = nil
+    @Binding var existingTags: [String]
     var onRefresh: (() -> Void)?
-
+    
     var body: some View {
         List {
-            ForEach(notes) { note in
-                NavigationLink(
-                    destination: NoteDetailView(note: note) { updatedTitle, updatedText in
-                        var updatedNote = note
-                        updatedNote.title = updatedTitle
-                        updatedNote.body = updatedText
-                        DatabaseManager.shared.update(note: updatedNote)
-                        onRefresh?()
-                    }
-                ) {
-                    UIComponents.NoteCell(note: note)
-                }
-                .buttonStyle(.plain)
-                .listRowSeparator(.hidden)
-                .swipeActions(edge: .trailing) {
-                    Button(role: .destructive) {
-                        DatabaseManager.shared.delete(noteId: note.id)
-                        onRefresh?()
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
-                    Button {
-                        showModal = true
-                        selectedNote = note
-                    } label: {
-                        Label("Preferences", systemImage: "wrench")
+            ForEach(existingTags, id: \.self) { tag in
+                Section(tag) {
+                    ForEach(notes) { note in
+                        NavigationLink(
+                            destination: NoteDetailView(note: note) { updatedTitle, updatedText in
+                                var updatedNote = note
+                                updatedNote.title = updatedTitle
+                                updatedNote.body = updatedText
+                                DatabaseManager.shared.update(note: updatedNote)
+                                onRefresh?()
+                            }
+                        ) {
+                            UIComponents.NoteCell(note: note)
+                        }
+                        .buttonStyle(.plain)
+                        .listRowSeparator(.hidden)
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                DatabaseManager.shared.delete(noteId: note.id)
+                                onRefresh?()
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                            Button {
+                                showModal = true
+                                selectedNote = note
+                            } label: {
+                                Label("Preferences", systemImage: "wrench")
+                            }
+                        }
                     }
                 }
             }
@@ -126,7 +134,7 @@ struct NoteListView: View {
         .listStyle(.plain)
         .sheet(item: $selectedNote) { noteItem in
             if let index = notes.firstIndex(where: { $0.id == noteItem.id }) {
-                ModalPreference(note: $notes[index], allNotes: notes)
+                ModalPreference(note: $notes[index], allNotes: notes, existingTags: DatabaseManager.shared.getTags())
                     .presentationDetents([.medium])
             } else {
                 EmptyView()
@@ -139,6 +147,7 @@ struct NoteListView: View {
 struct ModalPreference: View {
     @Binding var note: Notes
     let allNotes: [Notes]
+    let existingTags: [String]
     
     private var possibleParents: [Notes] {
         allNotes.filter { $0.id != note.id }
@@ -162,7 +171,6 @@ struct ModalPreference: View {
                     }
                     .pickerStyle(.segmented)
                 }
-                
                 Section("Parent Note") {
                     Picker("Parent Node", selection: Binding(
                         get: { note.parentId },
@@ -177,8 +185,31 @@ struct ModalPreference: View {
                         }
                     }
                 }
+                TagPreference(existingTags: existingTags, note: $note)
             }
             .navigationTitle("Preferences")
+        }
+    }
+}
+
+struct TagPreference: View {
+    let existingTags: [String]
+    @Binding var note : Notes
+    
+    var body: some View {
+        Section("Tag") {
+            Picker("Node", selection: Binding(
+                get: {note.tag},
+                set: {newTag in
+                    note.tag = newTag
+                    DatabaseManager.shared.update(note: note)
+                }
+            )) {
+                Text("None").tag(String?.none)
+                ForEach(existingTags, id: \.self) { tag in
+                    Text(tag).tag(Optional(tag))
+                }
+            }
         }
     }
 }
@@ -240,20 +271,24 @@ struct NoteAdd: View {
                     .font(.system(size: 40))
             }
             .fullScreenCover(isPresented: $showNoteCreation) {
-                NoteCreationView { title, body in
-                    let note = Notes(
-                        id: UUID(),
-                        title: title,
-                        body: body,
-                        parentId: nil,
-                        children: [],
-                        lastUpdated: Date(),
-                        createdByUserId: "toprak",
-                        colorHex: "#007BFF"
-                    )
-                    DatabaseManager.shared.insert(note: note)
-                    onNoteAdded?()
-                }
+                NoteCreationView(
+                    onSave: { title, body, tag in
+                        let note = Notes(
+                            id: UUID(),
+                            title: title,
+                            body: body,
+                            parentId: nil,
+                            children: [],
+                            lastUpdated: Date(),
+                            createdByUserId: "toprak",
+                            colorHex: "#007BFF",
+                            tag: tag
+                        )
+                        DatabaseManager.shared.insert(note: note)
+                        onNoteAdded?()
+                    },
+                    existingTags: DatabaseManager.shared.getTags()
+                )
             }
         }
     }
@@ -263,7 +298,12 @@ struct NoteAdd: View {
 struct NoteCreationView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var text: String = ""
-    var onSave: (String, String) -> Void
+    @State private var tag: String = ""
+    var onSave: (String, String, String) -> Void
+    var existingTags : [String]
+    @State private var showDropdown = false
+
+    
     
     var body: some View {
         VStack {
@@ -274,7 +314,7 @@ struct NoteCreationView: View {
                     let title = lines.first.map(String.init) ?? ""
                     let body = lines.count > 1 ? String(lines[1]) : ""
                     
-                    onSave(title, body)
+                    onSave(title, body, tag)
                     dismiss()
                 }) {
                     Label("Back", systemImage: "chevron.left")
@@ -283,6 +323,41 @@ struct NoteCreationView: View {
                 Spacer()
             }
             .padding()
+            
+            VStack(alignment: .leading, spacing: 8) {
+                DisclosureGroup(
+                    isExpanded: $showDropdown,
+                    content: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(existingTags, id: \.self) { existingTags in
+                                Button(existingTags) {
+                                    tag = existingTags
+                                    showDropdown = false
+                                }
+                                .padding(.vertical, 2)
+                            }
+                            
+                            Divider()
+                            TextField("New tag...", text: $tag)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .padding(.vertical, 2)
+                        }
+                        .padding()
+                    },
+                    label: {
+                        HStack {
+                            Text(tag.isEmpty ? "Tag..." : tag)
+                                .foregroundColor(tag.isEmpty ? .secondary : .primary)
+                            
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(10)
+                    }
+                )
+            }
+
             
             TextEditor(text: $text)
                 .textInputAutocapitalization(.never)

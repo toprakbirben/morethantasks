@@ -41,7 +41,8 @@ class SQLiteDatabase: DatabaseProvider {
             parent_id TEXT,
             last_updated REAL NOT NULL,
             created_by_user_id TEXT NOT NULL,
-            color TEXT
+            color TEXT,
+            tag TEXT
         );
         """
 
@@ -80,7 +81,8 @@ class SQLiteDatabase: DatabaseProvider {
                 let lastUpdated = Date(timeIntervalSince1970: sqlite3_column_double(queryStatement, 4))
                 let createdByUserId = String(cString: sqlite3_column_text(queryStatement, 5))
                 let color = sqlite3_column_text(queryStatement, 6).map { String(cString: $0) }
-                
+                let tag = sqlite3_column_text(queryStatement, 7).map { String(cString: $0) }
+
                 notes.append(Notes(
                     id: id,
                     title: title,
@@ -89,7 +91,8 @@ class SQLiteDatabase: DatabaseProvider {
                     children: [],
                     lastUpdated: lastUpdated,
                     createdByUserId: createdByUserId,
-                    colorHex: color
+                    colorHex: color,
+                    tag: tag
                 ))
             }
         } else {
@@ -99,13 +102,28 @@ class SQLiteDatabase: DatabaseProvider {
         return notes
     }
     
+    func fetchTags() -> [String] {
+        var tags: [String] = []
+        let query = "SELECT DISTINCT tag FROM notes WHERE tag IS NOT NULL AND tag <> '';"
+        var statement: OpaquePointer?
+
+        if sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK {
+            while sqlite3_step(statement) == SQLITE_ROW {
+                let tag = String(cString: sqlite3_column_text(statement, 0))
+                tags.append(tag)
+            }
+        }
+        sqlite3_finalize(statement)
+        return tags
+    }
+    
     // MARK: - Insert
-    func insert(title: String, noteBody: String, completion: @escaping () -> Void) {
+    func insert(title: String, noteBody: String,tag: String?, completion: @escaping () -> Void) {
         let noteId = UUID().uuidString
         let lastUpdated = Date().timeIntervalSince1970
         let insertQuery = """
-        INSERT INTO notes (id, title, body, parent_id, last_updated, created_by_user_id, color)
-        VALUES (?, ?, ?, ?, ?, ?, ?);
+        INSERT INTO notes (id, title, body, parent_id, last_updated, created_by_user_id, color, tag)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
         """
         
         var insertStatement: OpaquePointer?
@@ -117,7 +135,8 @@ class SQLiteDatabase: DatabaseProvider {
             sqlite3_bind_double(insertStatement, 5, lastUpdated)
             sqlite3_bind_text(insertStatement, 6, ("toprak" as NSString).utf8String, -1, nil)
             sqlite3_bind_text(insertStatement, 7, ("#28A745" as NSString).utf8String, -1, nil)
-            
+            sqlite3_bind_text(insertStatement, 8, ("" as NSString).utf8String, -1, nil)
+
             if sqlite3_step(insertStatement) == SQLITE_DONE {
                 print("Note inserted successfully into SQLite.")
                 DispatchQueue.main.async { completion() }
@@ -131,7 +150,7 @@ class SQLiteDatabase: DatabaseProvider {
     }
     
     // MARK: - Update
-    func update(noteId: String, title: String?, noteBody: String?, noteParent: String?, noteColor: String?, completion: @escaping () -> Void) {
+    func update(noteId: String, title: String?, noteBody: String?, noteParent: String?, noteColor: String?, tag: String?, completion: @escaping () -> Void) {
         
         let updateQuery = """
         UPDATE notes

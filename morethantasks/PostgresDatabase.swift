@@ -48,6 +48,7 @@ class PostgresDatabase: DatabaseProvider {
                 let lastUpdated = try columns[4].timestamp().date(in: .current)
                 let createdByUserId = try columns[5].string()
                 let color = try? columns[6].string()
+                let tag = try? columns[7].string()
 
                 notes.append(Notes(
                     id: id,
@@ -57,7 +58,8 @@ class PostgresDatabase: DatabaseProvider {
                     children: [],
                     lastUpdated: lastUpdated,
                     createdByUserId: createdByUserId,
-                    colorHex: color
+                    colorHex: color,
+                    tag: tag
                 ))
             }
         } catch {
@@ -65,13 +67,35 @@ class PostgresDatabase: DatabaseProvider {
         }
         return notes
     }
+    
+    func fetchTags() -> [String] {
+        var tags: [String] = []
+        do {
+            let connection = try PostgresClientKit.Connection(configuration: configuration)
+            defer { connection.close() }
 
+            let text = "SELECT DISTINCT tag FROM notes WHERE tag IS NOT NULL AND tag <> '';"
+            let statement = try connection.prepareStatement(text: text)
+            let cursor = try statement.execute()
+            defer { cursor.close() }
+
+            for row in cursor {
+                let tag = try row.get().columns[0].string()
+                tags.append(tag)
+            }
+        } catch {
+            print("Postgres fetchTags error:", error)
+        }
+        return tags
+    }
+    
     // MARK: - Insert
-    func insert(title: String, noteBody: String, completion: @escaping () -> Void) {
+    func insert(title: String, noteBody: String, tag: String?, completion: @escaping () -> Void) {
         guard let url = URL(string: "http://192.168.178.187:8000/add_note") else { return }
         let noteData: [String: Any] = [
             "title": title,
             "body": noteBody,
+            "tag" : tag ?? "",
             "created_by_user_id": "toprak"
         ]
 
@@ -93,12 +117,7 @@ class PostgresDatabase: DatabaseProvider {
     }
 
     // MARK: - Update
-    func update(noteId: String,
-                title: String?,
-                noteBody: String?,
-                noteParent: String?,
-                noteColor: String?,
-                completion: @escaping () -> Void) {
+    func update(noteId: String, title: String?, noteBody: String?,noteParent: String?, noteColor: String?, tag: String?, completion: @escaping () -> Void) {
 
         guard let url = URL(string: "http://192.168.178.187:8000/edit_note") else { return }
         var request = URLRequest(url: url)

@@ -14,25 +14,27 @@ import NaturalLanguage
 
 
 extension Color {
-    init?(hex: String) {
+    init(hex: String) {
         var hexString = hex.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         
         if hexString.hasPrefix("#") {
             hexString.removeFirst()
         }
         
-        guard hexString.count == 6,
-              let rgb = UInt64(hexString, radix: 16) else {
-            return nil
+        if hexString.count != 6 || UInt64(hexString, radix: 16) == nil {
+            self = .blue
+            return
         }
         
-        let red = Double((rgb & 0xFF0000) >> 16) / 255
-        let green = Double((rgb & 0x00FF00) >> 8) / 255
-        let blue = Double(rgb & 0x0000FF) / 255
+        let rgb = UInt64(hexString, radix: 16)!
+        let red   = Double((rgb & 0xFF0000) >> 16) / 255.0
+        let green = Double((rgb & 0x00FF00) >> 8) / 255.0
+        let blue  = Double(rgb & 0x0000FF) / 255.0
         
         self.init(red: red, green: green, blue: blue)
     }
 }
+
     
 class Helper {
     

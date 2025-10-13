@@ -12,8 +12,9 @@ import Network
 
 protocol DatabaseProvider {
     func fetchNotes() -> [Notes]
-    func insert(title: String, noteBody: String, completion: @escaping () -> Void)
-    func update(noteId: String, title: String?, noteBody: String?, noteParent: String?, noteColor: String?, completion: @escaping () -> Void)
+    func fetchTags() -> [String]
+    func insert(title: String, noteBody: String, tag: String?, completion: @escaping () -> Void)
+    func update(noteId: String, title: String?, noteBody: String?, noteParent: String?, noteColor: String?,tag: String?, completion: @escaping () -> Void)
     func delete(noteId: UUID, completion: @escaping () -> Void)
 }
 
@@ -30,6 +31,7 @@ class DatabaseManager: ObservableObject {
     private let queue = DispatchQueue(label: "NetworkMonitorQueue")
     
     private var notesDict: [UUID: Notes] = [:]
+    private var tagsDict: [String] = []
 
 
     
@@ -40,6 +42,7 @@ class DatabaseManager: ObservableObject {
                 guard let self = self else { return }
                 self.isConnected = path.status == .satisfied
                 self.activeDatabase = self.isConnected ? self.postgres : self.sqlite
+                //self.activeDatabase = self.sqlite // DEBUG PURPOSES
             }
         }
         monitor.start(queue: queue)
@@ -60,8 +63,12 @@ class DatabaseManager: ObservableObject {
             }
     }
     
+    func fetchTags() {
+        tagsDict = activeDatabase.fetchTags()
+    }
+    
     func insert(note: Notes) {
-        activeDatabase.insert(title: note.title, noteBody: note.body) {
+        activeDatabase.insert(title: note.title, noteBody: note.body, tag: note.tag) {
             self.notesDict[note.id] = note
             print("Insert success for note \(note.id)")
         }
@@ -73,7 +80,8 @@ class DatabaseManager: ObservableObject {
             title: note.title,
             noteBody: note.body,
             noteParent: note.parentId?.uuidString,
-            noteColor: note.colorHex
+            noteColor: note.colorHex,
+            tag: note.tag
         ) {
             self.notesDict[note.id] = note
             print("Update success for note \(note.id)")
@@ -89,6 +97,10 @@ class DatabaseManager: ObservableObject {
     
     func getNotes() -> [Notes] {
         return Array(notesDict.values)
+    }
+    
+    func getTags() -> [String] {
+        return tagsDict.sorted()
     }
 }
 

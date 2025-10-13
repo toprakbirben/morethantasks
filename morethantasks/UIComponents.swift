@@ -98,14 +98,14 @@ struct UIComponents {
             ZStack{
                 Rectangle()
                     .frame(width:widthOfNote, height: heightOfNote)
-                    .foregroundColor(Color(hex: note.colorHex ?? "#007BFF")?.opacity(0.8) ?? Color.blue.opacity(0.8))
+                    .foregroundColor(Color(hex: note.colorHex ?? "#007BFF").opacity(0.8))
                     .cornerRadius(10)
                     .opacity(0.60)
                     .overlay(alignment: .bottom) {
                         Text(note.title)
                             .padding()
                             .frame(width:widthOfNote, height: heightOfNote/2, alignment: .bottomLeading)
-                            .background(Color(hex: note.colorHex ?? "#007BFF")?.opacity(0.8) ?? Color.blue.opacity(0.8))
+                            .background(Color(hex: note.colorHex ?? "#007BFF").opacity(0.8))
                             .cornerRadius(10)
                             .opacity(0.80)
                     }
@@ -121,7 +121,7 @@ struct UIComponents {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding()
-                .background(Color(hex: note.colorHex ?? "#007BFF")?.opacity(0.8) ?? Color.blue.opacity(0.8))
+                .background(Color(hex: note.colorHex ?? "#007BFF").opacity(0.8))
                 .cornerRadius(10)
             
         }

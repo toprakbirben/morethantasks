@@ -13,7 +13,9 @@ struct Event: Identifiable, Codable {
     var endDate: Date
     var location: String?
     var allDay: Bool
-    var colorHex: String?  
+    var colorHex: String? {
+            DatabaseManager.shared.getNotes().first(where: { $0.id == id })?.colorHex
+        }
     
     init(
         id: UUID = UUID(),
@@ -22,7 +24,6 @@ struct Event: Identifiable, Codable {
         endDate: Date,
         location: String? = nil,
         allDay: Bool = false,
-        colorHex: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -30,7 +31,6 @@ struct Event: Identifiable, Codable {
         self.endDate = endDate
         self.location = location
         self.allDay = allDay
-        self.colorHex = colorHex
     }
 }
 class EventManager
@@ -55,19 +55,11 @@ class EventManager
         
         guard let date = Calendar.current.date(from: dateComponents) else { return nil }
         
-        let cleanedTitle = regex.stringByReplacingMatches(
-            in: text,
-            options: [],
-            range: NSRange(text.startIndex..., in: text),
-            withTemplate: ""
-        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanedTitle = Helper.shared.extractTitle(from: text)
         
         let startDate = Calendar.current.startOfDay(for: date)
         let endDate = Calendar.current.date(byAdding: .day, value: 1, to: startDate)!
         
-        // Pick a color for the event
-        let colors = ["#FF5733", "#33C1FF", "#33FF57", "#FF33A1"]
-        let chosenColor = colors.randomElement()
         
         return Event(
             id: note.id,
@@ -75,7 +67,6 @@ class EventManager
             startDate: startDate,
             endDate: endDate,
             allDay: true,
-            colorHex: chosenColor
         )
     }
     
@@ -90,6 +81,7 @@ class EventManager
     func getEvents() -> [Event] {
         return eventList
     }
+    
 }
 
 

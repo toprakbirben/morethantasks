@@ -16,6 +16,7 @@ struct Notes: Identifiable, Codable {
     var lastUpdated: Date
     var createdByUserId: String
     var colorHex: String?
+    var tag: String?
     
     static let databaseTableName = "notes"
 }
