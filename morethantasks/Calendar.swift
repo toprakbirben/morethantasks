@@ -9,18 +9,16 @@ import Foundation
 
 struct CalendarPage: View {
     @Binding var selectedTab: UIComponents.Tab
-    @State private var notes: [Notes] = []
-    @State private var events: [Event] = []
+    @StateObject private var db = DatabaseManager.shared
+    @StateObject private var em = EventManager.shared
     
     var body: some View {
         HStack {
-            CalendarView(events: events)
+            CalendarView(events: em.eventList)
         }
         .onAppear {
-            DatabaseManager.shared.fetchNotes()
-            notes = DatabaseManager.shared.getNotes()
-            EventManager.shared.createEvents(notes: notes)
-            events = EventManager.shared.getEvents()
+            em.createEvents(notes: db.notesArray)
+            em.eventList = EventManager.shared.getEvents()
         }
     }
 }

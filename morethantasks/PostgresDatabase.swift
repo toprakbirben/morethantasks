@@ -74,7 +74,7 @@ class PostgresDatabase: DatabaseProvider {
             let connection = try PostgresClientKit.Connection(configuration: configuration)
             defer { connection.close() }
 
-            let text = "SELECT DISTINCT tag FROM notes WHERE tag IS NOT NULL AND tag <> '';"
+            let text = "SELECT DISTINCT tag FROM notes;"
             let statement = try connection.prepareStatement(text: text)
             let cursor = try statement.execute()
             defer { cursor.close() }

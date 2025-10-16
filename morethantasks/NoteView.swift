@@ -10,9 +10,11 @@ import Combine
 
 struct NoteView: View {
     @Binding var selectedTab: UIComponents.Tab
-    @State private var notes: [Notes] = []
     @State private var searchText: String = ""
-    @State private var existingTags: [String] = []
+    
+    @StateObject var db = DatabaseManager.shared
+    
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -21,36 +23,28 @@ struct NoteView: View {
                         UIComponents.SearchBar(searchText: $searchText)
                         
                         ScrollView(.horizontal, showsIndicators: false) {
-                            RecentNoteView(notes: notes)
+                            RecentNoteView(database: db)
                         }
                         .fixedSize(horizontal: false, vertical: true)
                         
-                        NoteListView(notes: $notes, existingTags: $existingTags, onRefresh: refreshNotes)
+                        NoteListView(notes: $db.notesArray, existingTags: $db.tagsArray)
                         .padding()
                     }
-                    .onAppear {
-                        refreshNotes()
-                    }
-                    NoteAdd {
-                        refreshNotes()
-                    }.frame(width: 80, height: 80).position(x: geometry.size.width - 60, y: geometry.size.height - 60)
+                    NoteAdd()
+                        .frame(width: 80, height: 80).position(x: geometry.size.width - 60, y: geometry.size.height - 60)
                 }
             }
         }
-    }
-    
-    private func refreshNotes() {
-        DatabaseManager.shared.fetchNotes()
-        notes = DatabaseManager.shared.getNotes()
-        
-        DatabaseManager.shared.fetchTags()
-        existingTags = DatabaseManager.shared.getTags()
+        .onAppear {
+            print(db.tagsArray)
+        }
+
     }
 }
 
 // MARK: - Recent Notes Horizontal View
 struct RecentNoteView: View {
-    let notes: [Notes]
+    @StateObject var database: DatabaseManager
     
     var body: some View {
         VStack(alignment: .leading) {
@@ -62,12 +56,13 @@ struct RecentNoteView: View {
             
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 20) {
-                    ForEach(notes, id: \.id) { note in
+                    ForEach(database.notesArray, id: \.id) { note in
                         NavigationLink(
-                            destination: NoteDetailView(note: note) { updatedTitle, updatedText in
+                            destination: NoteDetailView(note: note, tagsArray: $database.tagsArray) { updatedTitle, updatedText, updatedTag in
                                 var updatedNote = note
                                 updatedNote.title = updatedTitle
                                 updatedNote.body = updatedText
+                                updatedNote.tag = updatedTag
                                 DatabaseManager.shared.update(note: updatedNote)
                             }
                         ) {
@@ -90,43 +85,18 @@ struct RecentNoteView: View {
 // MARK: - Note List View
 struct NoteListView: View {
     @Binding var notes: [Notes]
-    @State var showModal: Bool = false
-    @State private var selectedNote: Notes? = nil
     @Binding var existingTags: [String]
-    var onRefresh: (() -> Void)?
+    
+    @State var showModal: Bool = false
+    @State var selectedNote: Notes? = nil
     
     var body: some View {
         List {
             ForEach(existingTags, id: \.self) { tag in
+                let filteredNotes = notes.filter { $0.tag == tag }
                 Section(tag) {
-                    ForEach(notes) { note in
-                        NavigationLink(
-                            destination: NoteDetailView(note: note) { updatedTitle, updatedText in
-                                var updatedNote = note
-                                updatedNote.title = updatedTitle
-                                updatedNote.body = updatedText
-                                DatabaseManager.shared.update(note: updatedNote)
-                                onRefresh?()
-                            }
-                        ) {
-                            UIComponents.NoteCell(note: note)
-                        }
-                        .buttonStyle(.plain)
-                        .listRowSeparator(.hidden)
-                        .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) {
-                                DatabaseManager.shared.delete(noteId: note.id)
-                                onRefresh?()
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                            Button {
-                                showModal = true
-                                selectedNote = note
-                            } label: {
-                                Label("Preferences", systemImage: "wrench")
-                            }
-                        }
+                    ForEach(filteredNotes) { note in
+                        NoteRowView(note: note, existingTags: $existingTags, showModal: $showModal, selectedNote: $selectedNote)
                     }
                 }
             }
@@ -138,6 +108,43 @@ struct NoteListView: View {
                     .presentationDetents([.medium])
             } else {
                 EmptyView()
+            }
+        }
+    }
+}
+
+
+struct NoteRowView : View {
+    let note: Notes
+    @Binding var existingTags: [String]
+    @Binding var showModal: Bool
+    @Binding var selectedNote: Notes?
+    
+    var body: some View {
+        NavigationLink(
+            destination: NoteDetailView(note: note, tagsArray: $existingTags) { updatedTitle, updatedText, updatedTag in
+                var updatedNote = note
+                updatedNote.title = updatedTitle
+                updatedNote.body = updatedText
+                updatedNote.tag = updatedTag
+                DatabaseManager.shared.update(note: updatedNote)
+            }
+        ) {
+            UIComponents.NoteCell(note: note)
+        }
+        .buttonStyle(.plain)
+        .listRowSeparator(.hidden)
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) {
+                DatabaseManager.shared.delete(noteId: note.id)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            Button {
+                showModal = true
+                selectedNote = note
+            } label: {
+                Label("Preferences", systemImage: "wrench")
             }
         }
     }
@@ -205,9 +212,9 @@ struct TagPreference: View {
                     DatabaseManager.shared.update(note: note)
                 }
             )) {
-                Text("None").tag(String?.none)
+                Text("None").tag("")
                 ForEach(existingTags, id: \.self) { tag in
-                    Text(tag).tag(Optional(tag))
+                    Text(tag).tag(tag)
                 }
             }
         }
@@ -217,15 +224,21 @@ struct TagPreference: View {
 // MARK: - Note Detail View
 struct NoteDetailView: View {
     let note: Notes
+    @Binding var tagsArray: [String]
+    
     @State var title: String
     @State var text: String
-    
-    var onSave: ((String, String) -> Void)?
+    @State var tag: String = ""
 
-    init(note: Notes, onSave: ((String, String) -> Void)? = nil) {
+    
+    var onSave: ((String, String, String) -> Void)?
+
+    init(note: Notes, tagsArray: Binding<[String]>, onSave: ((String, String, String) -> Void)? = nil) {
         self.note = note
+        self._tagsArray = tagsArray
         _title = State(initialValue: note.title)
         _text = State(initialValue: note.body)
+        _tag = State(initialValue: note.tag ?? "")
         self.onSave = onSave
     }
 
@@ -236,18 +249,23 @@ struct NoteDetailView: View {
                     .font(.largeTitle)
                     .textInputAutocapitalization(.never)
                     .onChange(of: title) { oldValue, newValue in
-                        onSave?(newValue, text)
+                        onSave?(newValue, text, tag)
                     }
                     .bold()
                 
                 Divider()
+                
+                TagSelection(existingTags: tagsArray, tag: $tag)
+                    .onChange(of: tag) { oldValue, newValue in
+                        onSave?(title, text, newValue)
+                    }
                 
                 TextEditor(text: $text)
                     .textInputAutocapitalization(.never)
                     .frame(minHeight: 500)
                     .padding()
                     .onChange(of: text) { oldValue, newValue in
-                        onSave?(title, newValue)
+                        onSave?(title, newValue, tag)
                     }
             }
             .padding()
@@ -296,9 +314,9 @@ struct NoteAdd: View {
 
 // MARK: - Note Creation View
 struct NoteCreationView: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var text: String = ""
-    @State private var tag: String = ""
+    @Environment(\.dismiss) var dismiss
+    @State var text: String = ""
+    @State var tag: String = ""
     var onSave: (String, String, String) -> Void
     var existingTags : [String]
     @State private var showDropdown = false
@@ -324,39 +342,7 @@ struct NoteCreationView: View {
             }
             .padding()
             
-            VStack(alignment: .leading, spacing: 8) {
-                DisclosureGroup(
-                    isExpanded: $showDropdown,
-                    content: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(existingTags, id: \.self) { existingTags in
-                                Button(existingTags) {
-                                    tag = existingTags
-                                    showDropdown = false
-                                }
-                                .padding(.vertical, 2)
-                            }
-                            
-                            Divider()
-                            TextField("New tag...", text: $tag)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .padding(.vertical, 2)
-                        }
-                        .padding()
-                    },
-                    label: {
-                        HStack {
-                            Text(tag.isEmpty ? "Tag..." : tag)
-                                .foregroundColor(tag.isEmpty ? .secondary : .primary)
-                            
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(10)
-                    }
-                )
-            }
+            TagSelection(existingTags: existingTags, tag: $tag)
 
             
             TextEditor(text: $text)
@@ -366,6 +352,48 @@ struct NoteCreationView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color(.systemBackground))
                 .ignoresSafeArea(edges: .bottom)
+        }
+    }
+}
+
+struct TagSelection: View {
+    var existingTags : [String]
+    @State var showDropdown = false
+    @Binding var tag: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            DisclosureGroup(
+                isExpanded: $showDropdown,
+                content: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(existingTags, id: \.self) { existingTags in
+                            Button(existingTags) {
+                                tag = existingTags
+                                showDropdown = false
+                            }
+                            .padding(.vertical, 2)
+                        }
+                        
+                        Divider()
+                        TextField("New tag...", text: $tag)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .padding(.vertical, 2)
+                    }
+                    .padding()
+                },
+                label: {
+                    HStack {
+                        Text(tag.isEmpty ? "Tag..." : tag)
+                            .foregroundColor(tag.isEmpty ? .secondary : .primary)
+                        
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(10)
+                }
+            )
         }
     }
 }

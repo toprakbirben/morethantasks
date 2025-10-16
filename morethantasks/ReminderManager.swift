@@ -7,6 +7,7 @@
 import Foundation
 import Combine
 import NaturalLanguage
+import SwiftUI
 
 
 struct Reminder: Identifiable {
@@ -16,14 +17,27 @@ struct Reminder: Identifiable {
     var isCompleted: Bool = false
 }
 
-class ReminderManager {
+@MainActor
+class ReminderManager: ObservableObject {
     static let shared = ReminderManager()
     private let pattern = #"\\@(\d{2}-\d{2}-\d{4})"#
-    private var reminders : [Reminder] = []
+    private var cancellables = Set<AnyCancellable>()
+
+    @Published var remindersArray : [Reminder] = []
+    private let db = DatabaseManager.shared
+    
+    init() {
+        db.$notesArray
+            .sink { [weak self] notes in
+                guard let self = self else { return }
+                self.createReminders(noteArray: notes)
+            }
+            .store(in: &cancellables)
+    }
     
     func createReminders(noteArray: [Notes]) {
         for note in noteArray {
-            if reminders.contains(where: { $0.id == note.id }) {continue}
+            if remindersArray.contains(where: { $0.id == note.id }) {continue}
             guard let date = Helper.shared.extractDate(from: note.body) else {
                 continue
             }
@@ -31,12 +45,8 @@ class ReminderManager {
 
             
             let reminder = Reminder(id: note.id, body: body, dueDate: date)
-            reminders.append(reminder)
+            remindersArray.append(reminder)
         }
-    }
-    
-    func getReminders() -> [Reminder] {
-        return reminders
     }
     
 }

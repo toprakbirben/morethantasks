@@ -18,6 +18,7 @@ protocol DatabaseProvider {
     func delete(noteId: UUID, completion: @escaping () -> Void)
 }
 
+@MainActor
 class DatabaseManager: ObservableObject {
     static let shared = DatabaseManager()
     
@@ -30,19 +31,21 @@ class DatabaseManager: ObservableObject {
     private let monitor = NWPathMonitor()
     private let queue = DispatchQueue(label: "NetworkMonitorQueue")
     
-    private var notesDict: [UUID: Notes] = [:]
-    private var tagsDict: [String] = []
+    @Published var tagsArray: [String] = []
+    @Published var notesArray: [Notes] = []
 
 
     
     init() {
-        activeDatabase = sqlite
+        self.activeDatabase = sqlite
         monitor.pathUpdateHandler = { [weak self] path in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 guard let self = self else { return }
                 self.isConnected = path.status == .satisfied
                 self.activeDatabase = self.isConnected ? self.postgres : self.sqlite
                 //self.activeDatabase = self.sqlite // DEBUG PURPOSES
+                self.fetchNotes()
+                self.fetchTags()
             }
         }
         monitor.start(queue: queue)
@@ -57,21 +60,23 @@ class DatabaseManager: ObservableObject {
     }
     
     func fetchNotes() {
-        let fetchedNotes = activeDatabase.fetchNotes()
-            for note in fetchedNotes {
-                notesDict[note.id] = note
-            }
+        notesArray = activeDatabase.fetchNotes()
     }
     
     func fetchTags() {
-        tagsDict = activeDatabase.fetchTags()
+        tagsArray = activeDatabase.fetchTags()
     }
     
     func insert(note: Notes) {
-        activeDatabase.insert(title: note.title, noteBody: note.body, tag: note.tag) {
-            self.notesDict[note.id] = note
-            print("Insert success for note \(note.id)")
-        }
+        if !notesArray.contains(where: { $0.id == note.id }) {
+                activeDatabase.insert(title: note.title, noteBody: note.body, tag: note.tag) {
+                    Task { @MainActor in
+                        self.notesArray.append(note)
+                        print(self.notesArray)
+                        print(note)
+                    }
+                }
+            }
     }
     
     func update(note: Notes) {
@@ -83,24 +88,26 @@ class DatabaseManager: ObservableObject {
             noteColor: note.colorHex,
             tag: note.tag
         ) {
-            self.notesDict[note.id] = note
-            print("Update success for note \(note.id)")
+            Task { @MainActor in
+                if let index = self.notesArray.firstIndex(where: { $0.id == note.id }) {
+                    self.notesArray[index] = note
+                    print("Update success for note inside of the closure \(note.id)")
+                }
+            }
         }
     }
     
     func delete(noteId: UUID) {
         activeDatabase.delete(noteId: noteId) {
-            self.notesDict.removeValue(forKey: noteId)
-            print("Delete success for note \(noteId)")
+            Task { @MainActor in
+                self.notesArray.removeAll { $0.id == noteId }
+                print("Delete success for note \(noteId)")
+            }
         }
     }
     
-    func getNotes() -> [Notes] {
-        return Array(notesDict.values)
-    }
-    
     func getTags() -> [String] {
-        return tagsDict.sorted()
+        return tagsArray.sorted()
     }
 }
 

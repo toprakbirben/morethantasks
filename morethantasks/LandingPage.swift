@@ -14,9 +14,11 @@ enum Tab {
 
 struct LandingPage: View {
     @Binding var selectedTab: UIComponents.Tab
-    @State private var notes: [Notes] = []
-    @State private var reminders: [Reminder] = []
     @State private var searchText: String = ""
+    
+    @StateObject private var rm = ReminderManager.shared
+    @StateObject private var db = DatabaseManager.shared
+
     
     var body: some View {
         NavigationStack {
@@ -25,14 +27,14 @@ struct LandingPage: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         if !searchText.isEmpty {
-                            ForEach(Helper.shared.filteredNotes(searchText: searchText, notes: notes)) { note in
+                            ForEach(Helper.shared.filteredNotes(searchText: searchText, notes: db.notesArray)) { note in
                                 NavigationLink(
-                                    destination: NoteDetailView(note: note) { updatedTitle, updatedText in
+                                    destination: NoteDetailView(note: note, tagsArray: $db.tagsArray) { updatedTitle, updatedText, updatedTag in
                                         var updatedNote = note
                                         updatedNote.title = updatedTitle
                                         updatedNote.body = updatedText
+                                        updatedNote.tag = updatedTag
                                         DatabaseManager.shared.update(note: updatedNote)
-                                        notes = PostgresDatabase.shared.fetchNotes()
                                     }
                                 ) {
                                     UIComponents.NoteCell(note: note)
@@ -40,19 +42,13 @@ struct LandingPage: View {
                                 }
                             }
                         }
-                        TaskLookup(reminders: $reminders)
-                        FeaturedNotes(recentNotes: notes)
+                        TaskLookup(reminders: $rm.remindersArray)
+                        FeaturedNotes(recentNotes: $db.notesArray)
                     }
                     .padding(.horizontal)
                     .padding(.top, 8)
                     .animation(.easeInOut(duration: 0.3), value: searchText)
                 }
-            }
-            .onAppear {
-                DatabaseManager.shared.fetchNotes()
-                notes = DatabaseManager.shared.getNotes()
-                ReminderManager.shared.createReminders(noteArray: notes)
-                reminders = ReminderManager.shared.getReminders()
             }
         }
     }
@@ -94,7 +90,7 @@ struct TaskLookup: View {
 
 
 struct FeaturedNotes: View {
-    let recentNotes: [Notes]
+    @Binding var recentNotes: [Notes]
     var body: some View {
         GeometryReader { geometry in
             let rectHeight = geometry.size.height / 3

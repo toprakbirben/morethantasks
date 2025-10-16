@@ -13,9 +13,9 @@ struct Event: Identifiable, Codable {
     var endDate: Date
     var location: String?
     var allDay: Bool
-    var colorHex: String? {
-            DatabaseManager.shared.getNotes().first(where: { $0.id == id })?.colorHex
-        }
+    var colorHex: String? /*{
+        DatabaseManager.shared.notesArray.first(where: { $0.id == id })?.colorHex
+                           } */ = "#FFFFFF"
     
     init(
         id: UUID = UUID(),
@@ -33,9 +33,11 @@ struct Event: Identifiable, Codable {
         self.allDay = allDay
     }
 }
-class EventManager
+
+@MainActor
+class EventManager : ObservableObject
 {
-    private var eventList : [Event] = []
+    @Published var eventList : [Event] = []
     static let shared = EventManager()
 
     func parseEvent(note: Notes) -> Event? {
