@@ -71,9 +71,17 @@ class DatabaseManager: ObservableObject {
         if !notesArray.contains(where: { $0.id == note.id }) {
                 activeDatabase.insert(title: note.title, noteBody: note.body, tag: note.tag) {
                     Task { @MainActor in
-                        self.notesArray.append(note)
-                        print(self.notesArray)
-                        print(note)
+                        var updatedNotes = self.notesArray
+                        updatedNotes.append(note)
+                        self.notesArray = updatedNotes
+
+                        let tagsSet = Set(
+                            self.notesArray.map { note in
+                                let trimmed = note.tag?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                                return trimmed.isEmpty ? "None" : trimmed
+                            }
+                        )
+                        self.tagsArray = Array(tagsSet)
                     }
                 }
             }
@@ -90,9 +98,19 @@ class DatabaseManager: ObservableObject {
         ) {
             Task { @MainActor in
                 if let index = self.notesArray.firstIndex(where: { $0.id == note.id }) {
-                    self.notesArray[index] = note
-                    print("Update success for note inside of the closure \(note.id)")
+                    var updatedNotes = self.notesArray
+                    updatedNotes[index] = note
+                    self.notesArray = updatedNotes
+                    print("Update success for note \(note.id)")
                 }
+                let tagsSet = Set(
+                    self.notesArray.map { note in
+                        let trimmed = note.tag?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                        return trimmed.isEmpty ? "None" : trimmed
+                    }
+                )
+                let sortedTags = Array(tagsSet).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+                self.tagsArray = sortedTags
             }
         }
     }
@@ -100,8 +118,23 @@ class DatabaseManager: ObservableObject {
     func delete(noteId: UUID) {
         activeDatabase.delete(noteId: noteId) {
             Task { @MainActor in
-                self.notesArray.removeAll { $0.id == noteId }
-                print("Delete success for note \(noteId)")
+                var updatedNotes = self.notesArray
+                updatedNotes.removeAll { $0.id == noteId }
+                self.notesArray = updatedNotes
+                let tagsSet = Set(
+                    self.notesArray.map { note in
+                        let trimmed = note.tag?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                        return trimmed.isEmpty ? "None" : trimmed
+                    }
+                )
+                // Optional: make “None” appear first
+                let sortedTags = Array(tagsSet).sorted { a, b in
+                    if a == "None" { return true }
+                    if b == "None" { return false }
+                    return a.localizedCaseInsensitiveCompare(b) == .orderedAscending
+                }
+                self.tagsArray = sortedTags
+
             }
         }
     }

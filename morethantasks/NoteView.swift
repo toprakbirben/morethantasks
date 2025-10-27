@@ -93,7 +93,10 @@ struct NoteListView: View {
     var body: some View {
         List {
             ForEach(existingTags, id: \.self) { tag in
-                let filteredNotes = notes.filter { $0.tag == tag }
+                let filteredNotes = notes.filter { note in
+                    let currentTag = (note.tag?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) ? "None" : note.tag!
+                    return currentTag == tag
+                }
                 Section(tag) {
                     ForEach(filteredNotes) { note in
                         NoteRowView(note: note, existingTags: $existingTags, showModal: $showModal, selectedNote: $selectedNote)
@@ -206,7 +209,7 @@ struct TagPreference: View {
     var body: some View {
         Section("Tag") {
             Picker("Node", selection: Binding(
-                get: {note.tag},
+                get: {note.tag ?? ""},
                 set: {newTag in
                     note.tag = newTag
                     DatabaseManager.shared.update(note: note)

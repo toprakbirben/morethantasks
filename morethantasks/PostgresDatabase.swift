@@ -125,10 +125,11 @@ class PostgresDatabase: DatabaseProvider {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         var body: [String: Any] = ["note_id": noteId]
-        if let title = title { body["title"] = title }
-        if let noteBody = noteBody { body["body"] = noteBody }
-        if let noteParent = noteParent { body["parent_id"] = noteParent }
-        if let noteColor = noteColor { body["color"] = noteColor }
+        if let title = title {body["title"] = title}
+        if let noteBody = noteBody {body["body"] = noteBody}
+        if let noteParent = noteParent {body["parent_id"] = noteParent}
+        if let noteColor = noteColor {body["color"] = noteColor}
+        if let tag = tag {body["tag"] = tag}
 
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 

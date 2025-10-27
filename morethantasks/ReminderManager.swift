@@ -33,6 +33,7 @@ class ReminderManager: ObservableObject {
                 self.createReminders(noteArray: notes)
             }
             .store(in: &cancellables)
+        createReminders(noteArray: db.notesArray)
     }
     
     func createReminders(noteArray: [Notes]) {

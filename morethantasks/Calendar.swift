@@ -157,7 +157,7 @@ struct DaysGridView: View {
     //this function modifies the numbers' color
     private func foregroundColor(for date: Date) -> Color {
         if Helper.shared.isSameDay(date, selectedDate) {
-            return .black
+            return .accentColor
         } else if Helper.shared.isSameDay(date, Date()) {
             return Color.green
         } else {
