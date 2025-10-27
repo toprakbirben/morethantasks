@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		D578A1C62E5CD8D8002660C7 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D578A1C52E5CD8D8002660C7 /* GRDB */; };
 		D578A1DF2E61EF61002660C7 /* PostgresClientKit in Frameworks */ = {isa = PBXBuildFile; productRef = D578A1DE2E61EF61002660C7 /* PostgresClientKit */; };
+		D57AE2A82EAFEF42006F45F5 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = D57AE2A72EAFEF42006F45F5 /* README.md */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -32,6 +33,7 @@
 		D52E3B782DC0E1AA007D7F2F /* morethantasks.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = morethantasks.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D52E3B852DC0E1AB007D7F2F /* morethantasksTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = morethantasksTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D52E3B8F2DC0E1AB007D7F2F /* morethantasksUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = morethantasksUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D57AE2A72EAFEF42006F45F5 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -48,6 +50,11 @@
 		D52E3B922DC0E1AB007D7F2F /* morethantasksUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = morethantasksUITests;
+			sourceTree = "<group>";
+		};
+		D57AE2982EAFEEA5006F45F5 /* images */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = images;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -82,6 +89,8 @@
 		D52E3B6F2DC0E1AA007D7F2F = {
 			isa = PBXGroup;
 			children = (
+				D57AE2A72EAFEF42006F45F5 /* README.md */,
+				D57AE2982EAFEEA5006F45F5 /* images */,
 				D52E3B7A2DC0E1AA007D7F2F /* morethantasks */,
 				D52E3B882DC0E1AB007D7F2F /* morethantasksTests */,
 				D52E3B922DC0E1AB007D7F2F /* morethantasksUITests */,
@@ -116,6 +125,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				D52E3B7A2DC0E1AA007D7F2F /* morethantasks */,
+				D57AE2982EAFEEA5006F45F5 /* images */,
 			);
 			name = morethantasks;
 			packageProductDependencies = (
@@ -225,6 +235,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D57AE2A82EAFEF42006F45F5 /* README.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
