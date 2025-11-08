@@ -54,5 +54,5 @@ morethantasks acts like a personalised dashboard for better organization.
 
 ### Installation Process
 1. Clone the repository
-2. Setup Postgres database (for now)
+2. Setup Postgres database (for now) [MACOS Docker Guide](https://www.docker.com/blog/how-to-use-the-postgres-docker-official-image/)
 3. Clone main.py, this will act as a server
