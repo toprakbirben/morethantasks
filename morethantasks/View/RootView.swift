@@ -9,26 +9,29 @@ import SwiftUI
 
 struct RootView: View {
     @Binding var selectedTab: UIComponents.Tab
-    @Binding var notes: [Notes]
-    //@StateObject var viewModel
     
     var body: some View {
         
         
         VStack(spacing: 0) {
-            // Main content
             switch selectedTab {
             case .home:
-                AnyView(LandingPage(selectedTab: $selectedTab))
+                LandingPage(selectedTab: $selectedTab)
             case .notes:
-                AnyView(NoteView(selectedTab: $selectedTab))
+                NoteView(selectedTab: $selectedTab)
             case .calendar:
-                AnyView(CalendarPage(selectedTab: $selectedTab))
-            @unknown default:
+                CalendarPage(selectedTab: $selectedTab)
+            case .welcome:
+                WelcomeView(selectedTab: $selectedTab)
+            case .login:
+                LoginScreen(selectedTab: $selectedTab)
+            default:
                 AnyView(EmptyView())
             }
-
-            UIComponents.TaskBar(selectedTab: $selectedTab)
+            if selectedTab != .welcome && selectedTab != .login {
+                UIComponents.TaskBar(selectedTab: $selectedTab)
+            }
+            
         }
     }
 }
@@ -36,6 +39,6 @@ struct RootView: View {
 // Preview
 struct RootView_Previews: PreviewProvider {
     static var previews: some View {
-        RootView(selectedTab: .constant(.home),notes: .constant([]))
+        RootView(selectedTab: .constant(.welcome))
     }
 }

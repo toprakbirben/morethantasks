@@ -8,21 +8,24 @@
 import SwiftUI
 
 enum ViewStack {
+    case welcome
     case registration
-    case login
     case forgottenPassword
 }
 
 struct WelcomeView: View {
+    @Binding var selectedTab: UIComponents.Tab
+
     @State private var presentNextView = false
-    @State private var viewStack: ViewStack = .login
+    @State private var viewStack: ViewStack = .welcome
+    
     var body: some View {
         NavigationStack {
             VStack {
                 Image("welcome")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: .infinity)
+                    .frame(maxWidth: .infinity)
                     .padding(.top)
                     .padding(.bottom, 16)
                 Text("Your notes, reminders, and tasks. All in one place.")
@@ -38,8 +41,9 @@ struct WelcomeView: View {
                 
                 HStack {
                     Button {
-                        presentNextView.toggle()
-                        viewStack = .login
+                        //presentNextView.toggle()
+                        //viewStack = .login
+                        selectedTab = .login
                     } label : {
                         Text("Login")
                             .font(.system(size: 20, weight: .medium))
@@ -66,8 +70,8 @@ struct WelcomeView: View {
             .padding()
             .navigationDestination(isPresented: $presentNextView) {
                 switch viewStack {
-                    case .login: LoginScreen()
-                    case .registration: AccountSettings() //for now
+                    //case .login: LoginScreen(selectedTab: $selectedTab)
+                    case .registration: RegisterView()
                     default: EmptyView()
                 }
             }
@@ -75,6 +79,8 @@ struct WelcomeView: View {
     }
 }
 
-#Preview {
-    WelcomeView()
+struct WelcomeView_Previews: PreviewProvider {
+    static var previews: some View {
+        RootView(selectedTab: .constant(.welcome))
+    }
 }

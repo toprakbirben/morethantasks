@@ -18,6 +18,9 @@ enum Validator {
         let passRegex = "(?=.*[A-Za-z])(?=.*\\d)[A-Za-z\\d]{8,}"
         let passPredicate = NSPredicate(format: "SELF MATCHES %@", passRegex)
         return passPredicate.evaluate(with: password)
-
+    }
+    
+    static func loginCredentialsValid(_ email: String, _ password: String) -> Bool {
+        return isValidEmail(email) && isValidPassword(password)
     }
 }

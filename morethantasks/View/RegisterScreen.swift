@@ -10,11 +10,13 @@ import SwiftUI
 struct RegisterView : View {
     @FocusState private var focusedField: FocusedField?
     @State private var presentNextView = false
-    @State private var viewStack: ViewStack = .login
+    @State private var viewStack: ViewStack = .registration
     @State var emailText: String = ""
     @State var passText: String = ""
     @State var isValidEmail: Bool = false
     @State var isValidPassword: Bool = false
+    @StateObject var userDB = userDatabase.shared
+
     var body: some View {
         NavigationStack {
             VStack {
@@ -50,8 +52,12 @@ struct RegisterView : View {
                     }
                 
                 Button {
-                    /*@START_MENU_TOKEN@*//*@PLACEHOLDER=Action@*/ /*@END_MENU_TOKEN@*/
-                    //make this button go to LandingPage
+                    userDB.registerUser(email: emailText, passwordHash: passText) { success in
+                        if success {
+                            //viewStack = .landingPage
+                            //presentNextView.toggle()
+                        }
+                    }
                 }
                 label: {
                     Text("Sign up")
@@ -63,7 +69,7 @@ struct RegisterView : View {
                 .background(RoundedRectangle(cornerRadius: 12).fill(isValidPassword && isValidPassword ? Color("primary-blue"): Color("primary-blue").opacity(0.6)))
                 .padding(.horizontal)
                 .padding(.vertical)
-                .disabled(!(isValidPassword && isValidPassword))
+                .disabled(!(isValidPassword || isValidPassword))
             }
             .navigationDestination(isPresented: $presentNextView) {
                 switch viewStack {

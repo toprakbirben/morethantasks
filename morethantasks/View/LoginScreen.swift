@@ -15,11 +15,14 @@ enum FocusedField {
 
 
 struct LoginScreen: View {
+    @Binding var selectedTab: UIComponents.Tab
+
     @FocusState private var focusedField: FocusedField?
-    @State private var presentNextView = false
-    @State private var viewStack: ViewStack = .login
+    //@State private var presentNextView = false
+    //@State private var viewStack: ViewStack = .login
     @State var emailText: String = ""
     @State var passText: String = ""
+    @StateObject var userDB = userDatabase.shared
     var body: some View {
         NavigationStack {
             VStack {
@@ -38,7 +41,7 @@ struct LoginScreen: View {
                             .stroke(focusedField == .email ? Color("primary-blue"): Color.white, lineWidth: 3)
                     )
                     .padding(.horizontal)
-                TextField("Password", text: $passText)
+                SecureField("Password", text: $passText)
                     .focused($focusedField, equals: .password)
                     .padding()
                     .background(Color("secondary-blue").opacity(0.4))
@@ -51,8 +54,8 @@ struct LoginScreen: View {
                 HStack {
                     Spacer()
                     Button {
-                        presentNextView.toggle()
-                        viewStack = .forgottenPassword
+                        //presentNextView.toggle()
+                        //viewStack = .forgottenPassword
                     } label: {
                         Text("Forgor my password")
                             .font(.system(size: 14, weight: .semibold))
@@ -62,8 +65,17 @@ struct LoginScreen: View {
                 }
                 
                 Button {
-                    /*@START_MENU_TOKEN@*//*@PLACEHOLDER=Action@*/ /*@END_MENU_TOKEN@*/
-                    //make this button go to LandingPage
+                    //presentNextView.toggle()
+                    //viewStack = .landingPage
+                    userDB.loginUser(username: emailText, password: passText) { success, error in
+                        print(success)
+                            if success {
+                                print("✅ Login successful")
+                                selectedTab = .home
+                            } else {
+                                print("❌ Login failed")
+                            }
+                        }
                 } label: {
                     Text("Sign in")
                         .font(.system(size: 20, weight: .semibold))
@@ -77,12 +89,13 @@ struct LoginScreen: View {
                 
                 OtherLoginOptions()
             }
-            .navigationDestination(isPresented: $presentNextView) {
+            /*.navigationDestination(isPresented: $presentNextView) {
                 switch viewStack {
                     case .forgottenPassword: forgotPassword()
+                    case .landingPage: RootView(selectedTab: $selectedTab)
                     default: EmptyView()
                 }
-            }
+            } */
         }
     }
 }
@@ -140,6 +153,8 @@ struct AccountSettings: View {
 }
 
 
-#Preview {
-    LoginScreen()
+struct LoginScreenPreviews: PreviewProvider {
+    static var previews: some View {
+        RootView(selectedTab: .constant(.login))
+    }
 }

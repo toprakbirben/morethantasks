@@ -11,7 +11,7 @@ import SwiftUI
 struct UIComponents {
     
     enum Tab {
-        case notes, home, calendar
+        case notes, home, calendar, welcome, login, register
     }
     
     struct TaskBar: View {
@@ -73,12 +73,8 @@ struct UIComponents {
                             .foregroundColor(.black)
                     }
                 } else {
-                    NavigationLink(
-                        destination: true ? AnyView(LoginScreen()) : AnyView(AccountSettings())
-                    ) {
-                        Image(systemName: "person.crop.circle")
-                            .foregroundColor(.black)
-                    }
+                    Image(systemName: "person.crop.circle")
+                        .foregroundColor(.black)
                 }
             }
             .padding(.horizontal, 16.0)

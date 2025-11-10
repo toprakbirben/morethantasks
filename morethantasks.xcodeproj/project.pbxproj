@@ -36,9 +36,22 @@
 		D57AE2A72EAFEF42006F45F5 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		D5701A972EC23AEB005AC749 /* Exceptions for "morethantasks" folder in "morethantasks" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = D52E3B772DC0E1AA007D7F2F /* morethantasks */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		D52E3B7A2DC0E1AA007D7F2F /* morethantasks */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D5701A972EC23AEB005AC749 /* Exceptions for "morethantasks" folder in "morethantasks" target */,
+			);
 			path = morethantasks;
 			sourceTree = "<group>";
 		};

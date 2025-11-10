@@ -10,12 +10,12 @@ import SwiftUI
 @main
 struct morethantasksApp: App {
     
-    @State private var selectedTab: UIComponents.Tab = .home
-    @StateObject private var dbManager = DatabaseManager.shared
+    @State private var selectedTab: UIComponents.Tab = .welcome
+    @StateObject private var userDB = userDatabase.shared
     
     var body: some Scene {
         WindowGroup {
-            RootView(selectedTab: $selectedTab, notes: $dbManager.notesArray)
+            RootView(selectedTab: $selectedTab)
         }
     }
 }
