@@ -13,9 +13,10 @@ struct Event: Identifiable, Codable {
     var endDate: Date
     var location: String?
     var allDay: Bool
-    var colorHex: String? /*{
-        DatabaseManager.shared.notesArray.first(where: { $0.id == id })?.colorHex
-                           } */ = "#FFFFFF"
+    @MainActor
+        var colorHex: String? {
+            DatabaseManager.shared.notesArray.first(where: { $0.id == id })?.colorHex
+        }
     
     init(
         id: UUID = UUID(),

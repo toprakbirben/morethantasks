@@ -20,18 +20,18 @@ struct NoteView: View {
             ZStack {
                 GeometryReader { geometry in
                     VStack {
-                        UIComponents.SearchBar(searchText: $searchText)
+                        UIComponents.SearchBar(searchText: $searchText, selectedTab: $selectedTab)
                         
                         ScrollView(.horizontal, showsIndicators: false) {
                             RecentNoteView(database: db)
-                        }
-                        .fixedSize(horizontal: false, vertical: true)
+                        }.fixedSize(horizontal: false, vertical: true)
                         
                         NoteListView(notes: $db.notesArray, existingTags: $db.tagsArray)
-                        .padding()
+                            .padding()
                     }
+
                     NoteAdd()
-                        .frame(width: 80, height: 80).position(x: geometry.size.width - 60, y: geometry.size.height - 60)
+                        .frame(width: 80, height: 80).position(x: geometry.size.width - 60, y: geometry.size.height - 128)
                 }
             }
         }
@@ -46,7 +46,8 @@ struct RecentNoteView: View {
         VStack(alignment: .leading) {
             HStack {
                 Image(systemName: "clock").imageScale(.small)
-                Text("Recenten").font(.headline)
+                Text("Recenten")
+                    .font(.system(size: 16, weight: .light))
             }
             .padding(.horizontal)
             
@@ -185,7 +186,6 @@ struct ModalPreference: View {
                             DatabaseManager.shared.update(note: note)
                         }
                     )) {
-                        Text("None").tag(UUID?.none)
                         ForEach(possibleParents) { parent in
                             Text(parent.title).tag(Optional(parent.id))
                         }
@@ -297,7 +297,7 @@ struct NoteAdd: View {
                             parentId: nil,
                             children: [],
                             lastUpdated: Date(),
-                            createdByUserId: "toprak",
+                            userID: 0,
                             colorHex: "#007BFF",
                             tag: tag
                         )
@@ -394,6 +394,7 @@ struct TagSelection: View {
                 }
             )
         }
+        .padding()
     }
 }
 

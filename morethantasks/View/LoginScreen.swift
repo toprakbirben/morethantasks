@@ -11,6 +11,7 @@ import Foundation
 enum FocusedField {
     case email
     case password
+    case confirmPassword
 }
 
 
@@ -18,10 +19,11 @@ struct LoginScreen: View {
     @Binding var selectedTab: UIComponents.Tab
 
     @FocusState private var focusedField: FocusedField?
-    //@State private var presentNextView = false
-    //@State private var viewStack: ViewStack = .login
+    @State private var presentNextView = false
+    @State private var viewStack: ViewStack = .login
     @State var emailText: String = ""
     @State var passText: String = ""
+    @State var isVisible: Bool = true
     @StateObject var userDB = userDatabase.shared
     var body: some View {
         NavigationStack {
@@ -41,23 +43,14 @@ struct LoginScreen: View {
                             .stroke(focusedField == .email ? Color("primary-blue"): Color.white, lineWidth: 3)
                     )
                     .padding(.horizontal)
-                SecureField("Password", text: $passText)
-                    .focused($focusedField, equals: .password)
-                    .padding()
-                    .background(Color("secondary-blue").opacity(0.4))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(focusedField == .password ? Color("primary-blue"): Color.white, lineWidth: 3)
-                    )
-                    .padding(.horizontal)
+                UIComponents.passwordFields(passwordField: $passText)
                 HStack {
                     Spacer()
                     Button {
-                        //presentNextView.toggle()
-                        //viewStack = .forgottenPassword
+                        presentNextView.toggle()
+                        viewStack = .forgottenPassword
                     } label: {
-                        Text("Forgor my password")
+                        Text("Forgot my password")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(Color("primary-blue"))
                             .padding(.trailing)
@@ -65,15 +58,9 @@ struct LoginScreen: View {
                 }
                 
                 Button {
-                    //presentNextView.toggle()
-                    //viewStack = .landingPage
-                    userDB.loginUser(username: emailText, password: passText) { success, error in
-                        print(success)
+                    userDB.loginUser(email: emailText, password: passText) { success, error in
                             if success {
-                                print("✅ Login successful")
                                 selectedTab = .home
-                            } else {
-                                print("❌ Login failed")
                             }
                         }
                 } label: {
@@ -89,23 +76,77 @@ struct LoginScreen: View {
                 
                 OtherLoginOptions()
             }
-            /*.navigationDestination(isPresented: $presentNextView) {
+            .navigationDestination(isPresented: $presentNextView) {
                 switch viewStack {
                     case .forgottenPassword: forgotPassword()
-                    case .landingPage: RootView(selectedTab: $selectedTab)
                     default: EmptyView()
                 }
-            } */
+            }
         }
     }
 }
 
 struct forgotPassword: View {
+    @StateObject var userDB = userDatabase.shared
+
+    @FocusState private var focusedField: FocusedField?
+
+    @State var emailText: String = ""
+    @State var passText: String = ""
+    @State var confirmPass: String = ""
+    @State var message: String = ""
+    @State var isVisible: Bool = false
+
     var body: some View {
-        Text("Forgot Password?")
+        VStack {
+            Text("Reset Password")
+                .font(.system(size: 20, weight: .bold))
+                .padding(.bottom, 60)
+            TextField("Email", text: $emailText)
+                .focused($focusedField, equals: .email)
+                .padding()
+                .background(Color("secondary-blue").opacity(0.4))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(focusedField == .email ? Color("primary-blue"): Color.white, lineWidth: 3)
+                )
+                .padding(.horizontal)
+            
+            UIComponents.passwordFields(passwordField: $passText)
+            UIComponents.passwordFields(passwordField: $confirmPass)
+
+
+            Button {
+                if(passText == confirmPass && !passText.isEmpty && !emailText.isEmpty && !confirmPass.isEmpty) {
+                    userDB.resetPassword(email: emailText, password: passText) { success, error in
+                        if success {
+                            message = "Password successfully changed!"
+                        }
+                        else {
+                            message = "Password reset failed!"
+                        }
+                        
+                    }
+                }
+            } label : {
+                Text("Reset Password")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(Color.white)
+            }
+                .padding(.vertical)
+                .frame(maxWidth: .infinity)
+                .background(RoundedRectangle(cornerRadius: 12).fill(Color("primary-blue")))
+                .padding(.horizontal)
+                .padding(.vertical)
+            Text(message)
+                .font(.system(size: 14, weight: .medium))
+        }
     }
 }
 
+// This section includes logging in with other means such as google, facebook or etc
+// Currently not active as it does not include functionality besides visuals.
 struct OtherLoginOptions: View {
     var body: some View {
         VStack {

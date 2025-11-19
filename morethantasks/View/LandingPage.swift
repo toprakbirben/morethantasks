@@ -7,11 +7,6 @@
 
 import SwiftUI
 
-
-enum Tab {
-    case home, notes, calendar
-}
-
 struct LandingPage: View {
     @Binding var selectedTab: UIComponents.Tab
     @State private var searchText: String = ""
@@ -23,7 +18,7 @@ struct LandingPage: View {
     var body: some View {
         NavigationStack {
             VStack {
-                UIComponents.SearchBar(searchText: $searchText)
+                UIComponents.SearchBar(searchText: $searchText, selectedTab: $selectedTab)
                 ScrollView {
                     VStack(spacing: 16) {
                         if !searchText.isEmpty {
@@ -49,10 +44,6 @@ struct LandingPage: View {
                     .padding(.top, 8)
                     .animation(.easeInOut(duration: 0.3), value: searchText)
                 }
-            }
-            .onAppear {
-                //rm.createReminders(noteArray: db.notesArray)
-                //print(rm.remindersArray)
             }
         }
     }
@@ -101,13 +92,13 @@ struct FeaturedNotes: View {
             LazyVGrid(columns: [
                 GridItem(.flexible(minimum: 50, maximum: .infinity)),
                 GridItem(.flexible(minimum: 50, maximum: .infinity))
-            ], spacing: 20) {
+            ], spacing: 12) {
                 ForEach(0..<6) { index in
                     Rectangle()
-                        .fill(Color.blue)
-                        .cornerRadius(10)
+                        .fill(Color("primary-blue"))
+                        .cornerRadius(12)
                         .frame(height: rectHeight)
-                        .overlay(Text("\(index + 1)").foregroundColor(.white))
+                        .overlay(Text("Placeholder").foregroundColor(.white))
                         .padding(4)
                 }
             }

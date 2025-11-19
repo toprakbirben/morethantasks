@@ -40,7 +40,7 @@ class SQLiteDatabase: DatabaseProvider {
             body TEXT NOT NULL,
             parent_id TEXT,
             last_updated REAL NOT NULL,
-            created_by_user_id TEXT NOT NULL,
+            created_by_user_id INT NOT NULL,
             color TEXT,
             tag TEXT
         );
@@ -79,7 +79,7 @@ class SQLiteDatabase: DatabaseProvider {
                 }
                 
                 let lastUpdated = Date(timeIntervalSince1970: sqlite3_column_double(queryStatement, 4))
-                let createdByUserId = String(cString: sqlite3_column_text(queryStatement, 5))
+                let createdByUserId = Int(sqlite3_column_int(queryStatement, 5))
                 let color = sqlite3_column_text(queryStatement, 6).map { String(cString: $0) }
                 let tag = sqlite3_column_text(queryStatement, 7).map { String(cString: $0) }
 
@@ -90,7 +90,7 @@ class SQLiteDatabase: DatabaseProvider {
                     parentId: parentId,
                     children: [],
                     lastUpdated: lastUpdated,
-                    createdByUserId: createdByUserId,
+                    userID: createdByUserId,
                     colorHex: color,
                     tag: tag
                 ))

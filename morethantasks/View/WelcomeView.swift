@@ -11,6 +11,8 @@ enum ViewStack {
     case welcome
     case registration
     case forgottenPassword
+    case accountSettings
+    case login
 }
 
 struct WelcomeView: View {
@@ -41,8 +43,6 @@ struct WelcomeView: View {
                 
                 HStack {
                     Button {
-                        //presentNextView.toggle()
-                        //viewStack = .login
                         selectedTab = .login
                     } label : {
                         Text("Login")
@@ -70,7 +70,6 @@ struct WelcomeView: View {
             .padding()
             .navigationDestination(isPresented: $presentNextView) {
                 switch viewStack {
-                    //case .login: LoginScreen(selectedTab: $selectedTab)
                     case .registration: RegisterView()
                     default: EmptyView()
                 }

@@ -14,7 +14,7 @@ struct Notes: Identifiable, Codable {
     var parentId: UUID?
     var children: [Notes] = []
     var lastUpdated: Date
-    var createdByUserId: String
+    var userID: Int
     var colorHex: String?
     var tag: String?
     

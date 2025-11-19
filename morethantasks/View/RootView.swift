@@ -13,7 +13,7 @@ struct RootView: View {
     var body: some View {
         
         
-        VStack(spacing: 0) {
+        ZStack(alignment: .bottom) {
             switch selectedTab {
             case .home:
                 LandingPage(selectedTab: $selectedTab)
@@ -30,15 +30,16 @@ struct RootView: View {
             }
             if selectedTab != .welcome && selectedTab != .login {
                 UIComponents.TaskBar(selectedTab: $selectedTab)
+                    .padding(.bottom, 10)
             }
-            
         }
+        //.ignoresSafeArea(.container, edges: .bottom)
     }
 }
 
 // Preview
 struct RootView_Previews: PreviewProvider {
     static var previews: some View {
-        RootView(selectedTab: .constant(.welcome))
+        RootView(selectedTab: .constant(.notes))
     }
 }

@@ -42,6 +42,7 @@ struct CalendarView: View {
                 WeekdayHeaderView()
                 
                 DaysGridView(selectedDate: $selectedDate, events: groupedEvents)
+                    .padding(.bottom, 10)
                 
                 Divider().padding(.vertical, 4)
                 
@@ -67,7 +68,7 @@ struct MonthHeaderView: View {
     
     var body: some View {
         Text(Helper.shared.monthYearString(for: selectedDate))
-            .font(.title)
+            .font(.system(size: 24, weight: .heavy))
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal)
             .gesture(
@@ -92,15 +93,19 @@ struct MonthHeaderView: View {
 
 
 struct WeekdayHeaderView: View {
+    private let columns = Array(repeating: GridItem(.flexible()), count: 7)
+    private let weekdays = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+    
     var body: some View {
-        HStack {
-            ForEach(["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], id: \.self) { day in
+        LazyVGrid(columns: columns) {
+            ForEach(weekdays, id: \.self) { day in
                 Text(day)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .font(.subheadline)
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.gray)
+                    .frame(maxWidth: .infinity)
             }
         }
+        .padding(.horizontal)
     }
 }
 
@@ -116,14 +121,25 @@ struct DaysGridView: View {
             ForEach(days, id: \.self) { date in
                 if let date = date {
                     VStack(spacing: 4) {
-                        Text("\(Calendar.current.component(.day, from: date))")
-                            .frame(width: 28, height: 28, alignment: .center)
-                            .background(backgroundColor(for: date))
-                            .clipShape(Circle())
-                            .foregroundColor(foregroundColor(for: date))
-                            .onTapGesture {
-                                selectedDate = date
+                        ZStack {
+                            if Helper.shared.isSameDay(date, selectedDate) {
+                                Circle()
+                                    .fill(Color("primary-blue"))
+                                    .frame(width: 32, height: 32)
+                            } else if Helper.shared.isSameDay(date, Date()) {
+                                Circle()
+                                    .stroke(Color.green, lineWidth: 2)
+                                    .frame(width: 32, height: 32)
                             }
+                            
+                            Text("\(Calendar.current.component(.day, from: date))")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(foregroundColor(for: date))
+                        }
+                        .frame(height: 32)
+                        .onTapGesture {
+                            selectedDate = date
+                        }
                         
                         if let dayEvents = events[Calendar.current.startOfDay(for: date)], !dayEvents.isEmpty {
                             Circle()
@@ -146,7 +162,7 @@ struct DaysGridView: View {
     //this function modifies the circle around the numbers
     func backgroundColor(for date: Date) -> Color {
         if Helper.shared.isSameDay(date, selectedDate) {
-            return .primary
+            return Color("primary-blue")
         } else if Helper.shared.isSameDay(date, Date()) {
             return Color.clear
         }
@@ -157,12 +173,11 @@ struct DaysGridView: View {
     //this function modifies the numbers' color
     private func foregroundColor(for date: Date) -> Color {
         if Helper.shared.isSameDay(date, selectedDate) {
-            return .accentColor
+            return Color("primary-white")
         } else if Helper.shared.isSameDay(date, Date()) {
             return Color.green
-        } else {
-            return .primary
         }
+        return .primary
     }
 }
 
@@ -179,7 +194,7 @@ struct EventListView: View {
                         
                         NavigationLink(destination: EventDetailView(event: event)) {
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(Color(hex: event.colorHex ?? "#89CFF0"))
+                                .strokeBorder(Color(hex: event.colorHex ?? "#89CFF0"), lineWidth: 3)
                                 .frame(height: 60)
                                 .overlay(
                                     VStack(alignment: .leading) {
@@ -203,6 +218,7 @@ struct EventListView: View {
                 .padding(.horizontal)
             } else {
                 Text("No events today")
+                    .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.gray)
                     .padding()
             }

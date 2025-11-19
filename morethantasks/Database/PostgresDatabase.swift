@@ -40,27 +40,29 @@ class PostgresDatabase: DatabaseProvider {
                 let columns = try row.get().columns
                 guard let idString = try? columns[0].string(),
                       let id = UUID(uuidString: idString) else { continue }
+                
+                if(try columns[5].int() == UserDefaults.standard.integer(forKey: "loggedInUserId")) {
+                    let title = try columns[1].string()
+                    let body = try columns[2].string()
+                    let parentIdString = try? columns[3].string()
+                    let parentId = parentIdString.flatMap { UUID(uuidString: $0) }
+                    let lastUpdated = try columns[4].timestamp().date(in: .current)
+                    let createdByUserId = try columns[5].int()
+                    let color = try? columns[6].string()
+                    let tag = try? columns[7].string()
 
-                let title = try columns[1].string()
-                let body = try columns[2].string()
-                let parentIdString = try? columns[3].string()
-                let parentId = parentIdString.flatMap { UUID(uuidString: $0) }
-                let lastUpdated = try columns[4].timestamp().date(in: .current)
-                let createdByUserId = try columns[5].string()
-                let color = try? columns[6].string()
-                let tag = try? columns[7].string()
-
-                notes.append(Notes(
-                    id: id,
-                    title: title,
-                    body: body,
-                    parentId: parentId,
-                    children: [],
-                    lastUpdated: lastUpdated,
-                    createdByUserId: createdByUserId,
-                    colorHex: color,
-                    tag: tag
-                ))
+                    notes.append(Notes(
+                        id: id,
+                        title: title,
+                        body: body,
+                        parentId: parentId,
+                        children: [],
+                        lastUpdated: lastUpdated,
+                        userID: createdByUserId,
+                        colorHex: color,
+                        tag: tag
+                    ))
+                }
             }
         } catch {
             print("Postgres fetch error:", error)
@@ -74,14 +76,17 @@ class PostgresDatabase: DatabaseProvider {
             let connection = try PostgresClientKit.Connection(configuration: configuration)
             defer { connection.close() }
 
-            let text = "SELECT DISTINCT tag FROM notes;"
+            let text = "SELECT DISTINCT tag, user_id FROM notes;"
             let statement = try connection.prepareStatement(text: text)
             let cursor = try statement.execute()
             defer { cursor.close() }
 
-            for row in cursor {
-                let tag = try row.get().columns[0].string()
-                tags.append(tag)
+            for column in cursor {
+                let tag = try column.get().columns[0].string()
+                let userId = try column.get().columns[1].int()
+                if(userId == UserDefaults.standard.integer(forKey: "loggedInUserId")){
+                    tags.append(tag)
+                }
             }
         } catch {
             print("Postgres fetchTags error:", error)
@@ -92,11 +97,12 @@ class PostgresDatabase: DatabaseProvider {
     // MARK: - Insert
     func insert(title: String, noteBody: String, tag: String?, completion: @escaping () -> Void) {
         guard let url = URL(string: "http://192.168.178.187:8000/add_note") else { return }
+        
         let noteData: [String: Any] = [
             "title": title,
             "body": noteBody,
             "tag" : tag ?? "",
-            "created_by_user_id": "toprak"
+            "user_id": UserDefaults.standard.integer(forKey: "loggedInUserId")
         ]
 
         guard let jsonData = try? JSONSerialization.data(withJSONObject: noteData) else { return }
@@ -110,7 +116,7 @@ class PostgresDatabase: DatabaseProvider {
             if let error = error {
                 print("Postgres insert error:", error)
             } else {
-                print("✅ Note added to Postgres")
+                print("Note added to Postgres")
                 DispatchQueue.main.async { completion() }
             }
         }.resume()
