@@ -13,26 +13,26 @@ morethantasks acts like a personalised dashboard for better organization.
 -  **Tag System** — Easily filter and find your notes by tag.
   
 ## Tasks 
-  - [ ] Calorie Tracker  
-  - [ ] Habit Tracker  
-  - [ ] Cross-device Sync  
+  - [ ] Widget   
+  - [x] Cross-device Sync (possible only with POSTGRESQL)
   - [ ] AI-powered note summaries
   - [ ] Collaborative editing
   - [ ] Account info page
-  - [ ] Nested Notes
-  - [ ] 
+  - [x] Login and Register
+  - [ ] Make the UI prettier
 
 ---
 
 ## Screenshots
 
 <p align="center">
-  <img src="images/landing-view.png" width="30%" alt="Landing Page"/>
+  <img src="images/welcome.png" width="30%" alt="Landing Page"/> 
+  <img src="images/home.png" width="30%" alt="Landing Page"/> 
   <img src="images/landing-search.png" width="30%" alt="Landing Page Search"/>
-  <img src="images/note-view.png" width="30%" alt="Notes List" />
+  <img src="images/notes.png" width="30%" alt="Notes List" /> 
   <img src="images/note-preference.png" width="30%" alt="Note Preference(s)" />
   <img src="images/note-creation-view.png" width="30%" alt="Notes Creation View" />
-  <img src="images/calendar-events.png" width="30%" alt="Calendar View (colour scheme is temporary)" />
+  <img src="images/calendar.png" width="30%" alt="Calendar View (colour scheme is temporary)" /> 
 </p>
 ---
 
