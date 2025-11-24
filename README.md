@@ -20,6 +20,7 @@ morethantasks acts like a personalised dashboard for better organization.
   - [ ] Account info page
   - [x] Login and Register
   - [ ] Make the UI prettier
+  - [ ] Host the server online
 
 ---
 
