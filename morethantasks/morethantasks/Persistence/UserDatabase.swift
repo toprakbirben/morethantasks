@@ -66,26 +66,34 @@ class userDatabase: ObservableObject {
         guard let url = URL(string: "http://192.168.178.187:8000/add_user") else { return }
         
         let userData: [String: Any] = [
-            "id": UUID().uuidString,
             "email": email,
-            "passwordHash": passwordHash
+            "password": passwordHash
         ]
-        
+
         guard let jsonData = try? JSONSerialization.data(withJSONObject: userData) else { return }
-        
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = jsonData
-        
+
         URLSession.shared.dataTask(with: request) { data, response, error in
-            
+
             if let error = error {
                 print("Registration request error:", error)
-            } else {
-                DispatchQueue.main.async {completion(true)}
+                DispatchQueue.main.async { completion(false) }
+                return
             }
-            
+
+            guard let data = data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let success = json["success"] as? Bool else {
+                DispatchQueue.main.async { completion(false) }
+                return
+            }
+
+            DispatchQueue.main.async { completion(success) }
+
         }.resume()
 
     }

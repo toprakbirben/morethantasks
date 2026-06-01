@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from passlib.hash import bcrypt
 
-from db import conn
+from db import get_conn
 from models import LoginRequest
 
 router = APIRouter()
@@ -23,6 +23,7 @@ async def login(request: LoginRequest):
 
 
 async def login_user(email: str, password: str):
+    conn = get_conn()
     conn.rollback()
     with conn.cursor() as cur:
         cur.execute(
@@ -47,7 +48,7 @@ def __verify_password(plain_password: str, stored_hash) -> bool:
 
 @router.post("/add_user")
 def add_user(req: LoginRequest):
-
+    conn = get_conn()
     try:
         with conn.cursor() as curr:
             curr.execute(
@@ -71,6 +72,7 @@ def delete_user(req: dict):
     if not email:
         return {"success": False}
 
+    conn = get_conn()
     try:
         with conn.cursor() as curr:
             curr.execute("DELETE FROM users WHERE email = %s", (email,))
@@ -87,6 +89,7 @@ def delete_user(req: dict):
 def reset_password(req: LoginRequest):
     new_hash = bcrypt.hash(req.password)
 
+    conn = get_conn()
     with conn.cursor() as cur:
         cur.execute(
             "SELECT id FROM users WHERE email = %s",

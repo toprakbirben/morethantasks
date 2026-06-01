@@ -3,7 +3,7 @@ import uuid
 
 from fastapi import APIRouter
 
-from db import conn
+from db import get_conn
 from models import Note, NoteUpdate, DeleteNoteRequest
 
 router = APIRouter()
@@ -16,6 +16,7 @@ def add_note(note: Note):
     # last_updated is epoch seconds from the device.
     note_id = note.note_id or str(uuid.uuid4())
     last_updated = note.last_updated if note.last_updated is not None else datetime.now().timestamp()
+    conn = get_conn()
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -33,6 +34,7 @@ def add_note(note: Note):
 @router.delete("/remove_note")
 def remove_note(request: DeleteNoteRequest):
     # Soft delete (tombstone) so other devices learn of the deletion on pull.
+    conn = get_conn()
     with conn.cursor() as cur:
         cur.execute(
             "UPDATE notes SET deleted = true, last_updated = now() WHERE id = %s",
@@ -44,6 +46,7 @@ def remove_note(request: DeleteNoteRequest):
 
 @router.patch("/edit_note")
 def edit_note(note: NoteUpdate):
+    conn = get_conn()
     with conn.cursor() as cur:
         cur.execute(
             """
