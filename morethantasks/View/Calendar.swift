@@ -13,8 +13,12 @@ struct CalendarPage: View {
     @StateObject private var em = EventManager.shared
     
     var body: some View {
-        HStack {
-            CalendarView(events: em.eventList)
+        VStack {
+            HStack {
+                CalendarView(events: em.eventList)
+            }
+            Spacer()
+            addEventButton()
         }
         .onAppear {
             em.createEvents(notes: db.notesArray)
@@ -246,6 +250,36 @@ struct EventDetailView : View {
         }
     }
 }
+
+struct addEventButton: View {
+    @State private var presentNextView = false
+    @State private var viewStack: ViewStack?
+    
+    @State private var showAddEvent = false
+    var onNoteAdded: (() -> Void)?
+
+    var body: some View {
+        VStack {
+            Button {
+                showAddEvent.toggle()
+            } label: {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 40))
+            }
+            .fullScreenCover(isPresented: $showAddEvent) {
+                addEvent()
+            }
+        }
+    }
+}
+
+struct addEvent: View {
+    var body: some View {
+        Text("Hello")
+    }
+}
+
+
 
 // MARK: - Preview
 

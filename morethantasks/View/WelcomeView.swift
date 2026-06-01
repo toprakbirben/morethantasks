@@ -13,6 +13,7 @@ enum ViewStack {
     case forgottenPassword
     case accountSettings
     case login
+    case addEvent
 }
 
 struct WelcomeView: View {

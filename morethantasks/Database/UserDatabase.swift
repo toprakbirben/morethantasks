@@ -126,12 +126,12 @@ class userDatabase: ObservableObject {
 
                             UserDefaults.standard.set(userId, forKey: "loggedInUserId")
                             UserDefaults.standard.set(emailFromServer, forKey: "loggedInUserEmail")
-                            
+
+                            // Refresh the local view for this user and seed SQLite
+                            // from the server (so an existing user isn't shown an
+                            // empty app before the first periodic sync).
                             Task { @MainActor in
-                                DatabaseManager.shared.notesArray = []
-                                DatabaseManager.shared.tagsArray = []
-                                DatabaseManager.shared.fetchNotes()
-                                DatabaseManager.shared.fetchTags()
+                                DatabaseManager.shared.userDidLogin()
                             }
 
                             DispatchQueue.main.async { completion(true, nil) }
@@ -206,6 +206,8 @@ class userDatabase: ObservableObject {
             completion(false)
             return
         }
+        // Capture before logout clears it, so we can purge this user's local data.
+        let userId = UserDefaults.standard.integer(forKey: "loggedInUserId")
         
         guard let url = URL(string: "http://192.168.178.187:8000/delete_user") else {
             completion(false)
@@ -240,7 +242,8 @@ class userDatabase: ObservableObject {
                    let success = json["success"] as? Bool {
                     
                     if success {
-                        DispatchQueue.main.async {
+                        Task { @MainActor in
+                            DatabaseManager.shared.purgeLocalData(forUser: userId)
                             self.logout()
                             completion(true)
                         }
