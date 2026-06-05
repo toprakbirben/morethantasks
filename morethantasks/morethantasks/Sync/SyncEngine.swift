@@ -85,24 +85,23 @@ class SyncEngine {
     }
 
     private func pushInsert(_ note: Notes) async -> Bool {
-        await withCheckedContinuation { cont in
-            postgres.insert(note) { cont.resume(returning: $0) }
-        }
+        do { try await postgres.insert(note); return true }
+        catch { print("Postgres insert failed:", error); return false }
     }
 
     private func pushUpdate(_ note: Notes) async -> Bool {
-        await withCheckedContinuation { cont in
-            postgres.update(
+        do {
+            try await postgres.update(
                 noteId: note.id.uuidString, title: note.title, noteBody: note.body,
                 noteParent: note.parentId?.uuidString, noteColor: note.colorHex, tag: note.tag
-            ) { cont.resume(returning: $0) }
-        }
+            )
+            return true
+        } catch { print("Postgres update failed:", error); return false }
     }
 
     private func pushDelete(_ noteId: UUID) async -> Bool {
-        await withCheckedContinuation { cont in
-            postgres.delete(noteId: noteId) { cont.resume(returning: $0) }
-        }
+        do { try await postgres.delete(noteId: noteId); return true }
+        catch { print("Postgres delete failed:", error); return false }
     }
 
     // MARK: - Pull (server → local)

@@ -10,11 +10,11 @@ import Foundation
 
 
 struct AccountView : View {
-    @StateObject var userDB = userDatabase.shared
+    @StateObject private var vm = AccountViewModel()
     @Binding var selectedTab: UIComponents.Tab
 
     var body: some View {
-        
+
         NavigationStack {
             VStack {
                 Text("Profile Settings")
@@ -23,30 +23,31 @@ struct AccountView : View {
                     .resizable()
                     .frame(width: 100, height: 100)
                     .foregroundColor(Color("primary-blue"))
-                Text("Hello \(UserDefaults.standard.string(forKey: "loggedInUserEmail") ?? "")")
+                Text("Hello \(vm.userEmail)")
                     .font(.system(size: 20, weight: .medium))
-                
-                
+
+
                 Button {
-                    userDB.logout()
-                    selectedTab = .welcome
+                    vm.logout()
                 } label : {
                     Text("Log out")
                 }
-                
+
                 Button {
-                    userDB.delete_user { success in
-                        if success {
-                            print("User deleted successfully")
-                            selectedTab = .welcome
-                        } else {
-                            print("Failed to delete user")
-                        }
-                    }
+                    Task { await vm.deleteAccount() }
                 } label : {
                     Text("Delete Account")
                 }
-                
+
+                if let error = vm.errorMessage {
+                    Text(error)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.red)
+                }
+
+            }
+            .onChange(of: vm.didSignOut) { _, didSignOut in
+                if didSignOut { selectedTab = .welcome }
             }
         }
     }
