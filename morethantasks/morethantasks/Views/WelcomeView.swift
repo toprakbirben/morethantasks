@@ -71,7 +71,7 @@ struct WelcomeView: View {
             .padding()
             .navigationDestination(isPresented: $presentNextView) {
                 switch viewStack {
-                    case .registration: RegisterView()
+                    case .registration: RegisterView(selectedTab: $selectedTab)
                     default: EmptyView()
                 }
             }

@@ -30,4 +30,59 @@ final class NotesViewModel: ObservableObject {
     func add(_ note: Notes) { store.insert(note: note) }
     func update(_ note: Notes) { store.update(note: note) }
     func delete(id: UUID) { store.delete(noteId: id) }
+
+    // MARK: - Hierarchy
+
+    /// Normalizes a note's tag the way the list sections group on: empty/blank → "None".
+    private func tagKey(for note: Notes) -> String {
+        let trimmed = note.tag?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? "None" : trimmed
+    }
+
+    /// Root notes for a tag section, each with `children` populated recursively.
+    /// A note whose parentId is nil OR points to a missing note is treated as a
+    /// root, so an orphan never disappears from the tree.
+    func rootNotes(forTag tag: String) -> [Notes] {
+        let all = notes
+        let ids = Set(all.map(\.id))
+        var byParent: [UUID: [Notes]] = [:]
+        for note in all {
+            if let pid = note.parentId, ids.contains(pid) {
+                byParent[pid, default: []].append(note)
+            }
+        }
+        func attach(_ node: Notes) -> Notes {
+            var copy = node
+            copy.children = (byParent[node.id] ?? []).map(attach)
+            return copy
+        }
+        return all
+            .filter { ($0.parentId == nil || !ids.contains($0.parentId!)) && tagKey(for: $0) == tag }
+            .map(attach)
+    }
+
+    /// All descendant ids of a note — used to prevent cycles when re-parenting.
+    func descendantIds(of id: UUID) -> Set<UUID> {
+        var result = Set<UUID>()
+        var stack = [id]
+        while let current = stack.popLast() {
+            for child in notes where child.parentId == current {
+                if result.insert(child.id).inserted { stack.append(child.id) }
+            }
+        }
+        return result
+    }
+
+    /// Deletes a note, promoting its direct children up to the deleted note's
+    /// own parent (or to root if it was top-level) and clearing their tag.
+    func deleteAndPromoteChildren(_ note: Notes) {
+        let newParent = note.parentId
+        for child in notes where child.parentId == note.id {
+            var promoted = child
+            promoted.parentId = newParent
+            promoted.tag = ""
+            update(promoted)
+        }
+        delete(id: note.id)
+    }
 }
