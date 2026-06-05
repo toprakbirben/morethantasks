@@ -30,7 +30,7 @@ class userDatabase: ObservableObject {
     private func setupConnection() {
         do {
             var configuration = PostgresClientKit.ConnectionConfiguration()
-            configuration.host = "192.168.178.187"
+            configuration.host = ServerConfig.host
             configuration.port = 5432
             configuration.database = "notes"
             configuration.user = "notes"
@@ -63,8 +63,8 @@ class userDatabase: ObservableObject {
 
     func registerUser(email: String, passwordHash: String, completion: @escaping (Bool) -> Void) {
         
-        guard let url = URL(string: "http://192.168.178.187:8000/add_user") else { return }
-        
+        guard let url = URL(string: "\(ServerConfig.apiBaseURL)/users") else { return }
+
         let userData: [String: Any] = [
             "email": email,
             "password": passwordHash
@@ -85,84 +85,78 @@ class userDatabase: ObservableObject {
                 return
             }
 
-            guard let data = data,
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let success = json["success"] as? Bool else {
-                DispatchQueue.main.async { completion(false) }
-                return
-            }
-
-            DispatchQueue.main.async { completion(success) }
+            // 201 Created ⇒ success; 409 Conflict (duplicate email) or anything
+            // else ⇒ failure.
+            let created = (response as? HTTPURLResponse)?.statusCode == 201
+            DispatchQueue.main.async { completion(created) }
 
         }.resume()
 
     }
     
     func loginUser(email: String, password: String, completion: @escaping (Bool, Error?) -> Void) {
-        guard let url = URL(string: "http://192.168.178.187:8000/login") else { return }
-        
+        guard let url = URL(string: "\(ServerConfig.apiBaseURL)/sessions") else { return }
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
+
         let body: [String: Any] = [
             "email": email,
             "password": password
         ]
-        
+
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        
+
         URLSession.shared.dataTask(with: request) { data, response, error in
-            
+
             if let error = error {
                 print("Login request error:", error)
                 DispatchQueue.main.async { completion(false, error) }
                 return
             }
-            
-            guard let data = data else {
+
+            // 200 ⇒ session created; 401 (bad credentials) or anything else ⇒ failure.
+            guard (response as? HTTPURLResponse)?.statusCode == 200, let data = data else {
                 DispatchQueue.main.async { completion(false, nil) }
                 return
             }
-            
+
             do {
-                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    if let success = json["success"] as? Bool, success {
-                        if let user = json["user"] as? [String: Any],
-                           let userId = user["id"] as? Int,
-                           let emailFromServer = user["email"] as? String {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let user = json["user"] as? [String: Any],
+                   let userId = user["id"] as? Int,
+                   let emailFromServer = user["email"] as? String {
 
-                            UserDefaults.standard.set(userId, forKey: "loggedInUserId")
-                            UserDefaults.standard.set(emailFromServer, forKey: "loggedInUserEmail")
+                    UserDefaults.standard.set(userId, forKey: "loggedInUserId")
+                    UserDefaults.standard.set(emailFromServer, forKey: "loggedInUserEmail")
 
-                            // Refresh the local view for this user and seed SQLite
-                            // from the server (so an existing user isn't shown an
-                            // empty app before the first periodic sync).
-                            Task { @MainActor in
-                                DatabaseManager.shared.userDidLogin()
-                            }
-
-                            DispatchQueue.main.async { completion(true, nil) }
-                        }
-                    } else {
-                        DispatchQueue.main.async { completion(false, nil) }
+                    // Refresh the local view for this user and seed SQLite
+                    // from the server (so an existing user isn't shown an
+                    // empty app before the first periodic sync).
+                    Task { @MainActor in
+                        DatabaseManager.shared.userDidLogin()
                     }
+
+                    DispatchQueue.main.async { completion(true, nil) }
+                } else {
+                    DispatchQueue.main.async { completion(false, nil) }
                 }
             } catch {
                 print("JSON decode error:", error)
                 DispatchQueue.main.async { completion(false, error) }
             }
-            
+
         }.resume()
     }
     
     
     
     func resetPassword(email: String, password: String, completion: @escaping (Bool, Error?) -> Void) {
-        guard let url = URL(string: "http://192.168.178.187:8000/reset") else { return }
-        
+        guard let url = URL(string: "\(ServerConfig.apiBaseURL)/users/password-reset") else { return }
+
         var request = URLRequest(url: url)
-        request.httpMethod = "PATCH"
+        request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
         let body: [String: Any] = [
@@ -216,54 +210,34 @@ class userDatabase: ObservableObject {
         }
         // Capture before logout clears it, so we can purge this user's local data.
         let userId = UserDefaults.standard.integer(forKey: "loggedInUserId")
-        
-        guard let url = URL(string: "http://192.168.178.187:8000/delete_user") else {
+        _ = email // kept for the early-return guard above; the id now identifies the user.
+
+        guard let url = URL(string: "\(ServerConfig.apiBaseURL)/users/\(userId)") else {
             completion(false)
             return
         }
-        
-        let body: [String: Any] = ["email": email]
-        guard let jsonData = try? JSONSerialization.data(withJSONObject: body) else {
-            completion(false)
-            return
-        }
-        
+
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = jsonData
-        
+
         URLSession.shared.dataTask(with: request) { data, response, error in
             if let error = error {
                 print("Delete user request error:", error)
                 DispatchQueue.main.async { completion(false) }
                 return
             }
-            
-            guard let data = data else {
+
+            // 204 No Content ⇒ account deleted.
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard (200...299).contains(statusCode) else {
                 DispatchQueue.main.async { completion(false) }
                 return
             }
-            
-            do {
-                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let success = json["success"] as? Bool {
-                    
-                    if success {
-                        Task { @MainActor in
-                            DatabaseManager.shared.purgeLocalData(forUser: userId)
-                            self.logout()
-                            completion(true)
-                        }
-                    } else {
-                        DispatchQueue.main.async { completion(false) }
-                    }
-                } else {
-                    DispatchQueue.main.async { completion(false) }
-                }
-            } catch {
-                print("JSON decode error:", error)
-                DispatchQueue.main.async { completion(false) }
+
+            Task { @MainActor in
+                DatabaseManager.shared.purgeLocalData(forUser: userId)
+                self.logout()
+                completion(true)
             }
         }.resume()
     }

@@ -4,13 +4,13 @@ import uuid
 from fastapi import APIRouter
 
 from db import get_conn
-from models import Note, NoteUpdate, DeleteNoteRequest
+from models import Note, NoteUpdate
 
 router = APIRouter()
 
 
-@router.post("/add_note")
-def add_note(note: Note):
+@router.post("/notes", status_code=201)
+def create_note(note: Note):
     # Client-generated id is canonical across SQLite and Postgres. ON CONFLICT
     # makes outbox retries idempotent. parent_id/color arrive as "" → store NULL;
     # last_updated is epoch seconds from the device.
@@ -31,21 +31,23 @@ def add_note(note: Note):
     return {"status": "success", "message": "Note added", "note_id": note_id}
 
 
-@router.delete("/remove_note")
-def remove_note(request: DeleteNoteRequest):
+@router.delete("/notes/{note_id}", status_code=204)
+def delete_note(note_id: str):
     # Soft delete (tombstone) so other devices learn of the deletion on pull.
+    # Idempotent: deleting a missing/already-deleted note still returns 204 so
+    # the client's outbox retries don't loop forever.
     conn = get_conn()
     with conn.cursor() as cur:
         cur.execute(
             "UPDATE notes SET deleted = true, last_updated = now() WHERE id = %s",
-            (request.note_id,)
+            (note_id,)
         )
     conn.commit()
-    return {"status": "success", "message": "Note removed"}
+    return None
 
 
-@router.patch("/edit_note")
-def edit_note(note: NoteUpdate):
+@router.patch("/notes/{note_id}")
+def update_note(note_id: str, note: NoteUpdate):
     conn = get_conn()
     with conn.cursor() as cur:
         cur.execute(
@@ -60,7 +62,7 @@ def edit_note(note: NoteUpdate):
                 last_updated = %s
             WHERE id = %s
             """,
-            (note.title, note.body, note.color, note.parent_id, note.tag, datetime.now(), note.note_id)
+            (note.title, note.body, note.color, note.parent_id, note.tag, datetime.now(), note_id)
         )
     conn.commit()
     return {"status": "success", "message": "Note updated"}
