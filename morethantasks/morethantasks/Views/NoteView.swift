@@ -84,17 +84,21 @@ struct NoteListView: View {
     @EnvironmentObject var vm: NotesViewModel
 
     @State private var selectedNote: Notes? = nil
+    @State private var expanded: Set<UUID> = []
+    @State private var addChildParent: Notes? = nil
 
     var body: some View {
         List {
             ForEach(vm.tags, id: \.self) { tag in
-                let filteredNotes = vm.notes.filter { note in
-                    let currentTag = (note.tag?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) ? "None" : note.tag!
-                    return currentTag == tag
-                }
                 Section(tag) {
-                    ForEach(filteredNotes) { note in
-                        NoteRowView(note: note, selectedNote: $selectedNote)
+                    ForEach(vm.rootNotes(forTag: tag)) { root in
+                        NoteTreeRow(
+                            node: root,
+                            depth: 0,
+                            expanded: $expanded,
+                            selectedNote: $selectedNote,
+                            addChildParent: $addChildParent
+                        )
                     }
                 }
             }
@@ -105,41 +109,117 @@ struct NoteListView: View {
                 .environmentObject(vm)
                 .presentationDetents([.medium])
         }
+        .fullScreenCover(item: $addChildParent) { parent in
+            ChildCreationCover(parent: parent)
+                .environmentObject(vm)
+        }
     }
 }
 
-
-struct NoteRowView : View {
-    let note: Notes
+// MARK: - Recursive Tree Row
+struct NoteTreeRow: View {
+    let node: Notes
+    let depth: Int
+    @Binding var expanded: Set<UUID>
     @Binding var selectedNote: Notes?
+    @Binding var addChildParent: Notes?
     @EnvironmentObject var vm: NotesViewModel
 
+    private var isExpanded: Bool { expanded.contains(node.id) }
+    private var hasChildren: Bool { !node.children.isEmpty }
+
     var body: some View {
-        NavigationLink(
-            destination: NoteDetailView(note: note, tagsArray: .constant(vm.tags)) { updatedTitle, updatedText, updatedTag in
-                var updatedNote = note
-                updatedNote.title = updatedTitle
-                updatedNote.body = updatedText
-                updatedNote.tag = updatedTag
-                vm.update(updatedNote)
+        row
+        if isExpanded {
+            ForEach(node.children) { child in
+                NoteTreeRow(
+                    node: child,
+                    depth: depth + 1,
+                    expanded: $expanded,
+                    selectedNote: $selectedNote,
+                    addChildParent: $addChildParent
+                )
             }
-        ) {
-            UIComponents.NoteCell(note: note)
         }
-        .buttonStyle(.plain)
+    }
+
+    private var row: some View {
+        HStack(spacing: 8) {
+            if hasChildren {
+                Button {
+                    if isExpanded { expanded.remove(node.id) } else { expanded.insert(node.id) }
+                } label: {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .foregroundColor(.primary)
+                }
+                .buttonStyle(.plain)
+            } else {
+                Spacer().frame(width: 16)
+            }
+
+            NavigationLink(
+                destination: NoteDetailView(note: node, tagsArray: .constant(vm.tags)) { updatedTitle, updatedText, updatedTag in
+                    var updatedNote = node
+                    updatedNote.title = updatedTitle
+                    updatedNote.body = updatedText
+                    updatedNote.tag = updatedTag
+                    vm.update(updatedNote)
+                }
+            ) {
+                UIComponents.NoteCell(note: node)
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                addChildParent = node
+            } label: {
+                Image(systemName: "plus.circle")
+                    .foregroundColor(.primary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.leading, CGFloat(depth) * 16)
         .listRowSeparator(.hidden)
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
-                vm.delete(id: note.id)
+                vm.deleteAndPromoteChildren(node)
             } label: {
                 Label("Delete", systemImage: "trash")
             }
             Button {
-                selectedNote = note
+                selectedNote = node
             } label: {
                 Label("Preferences", systemImage: "wrench")
             }
         }
+    }
+}
+
+// MARK: - Add Child Note
+struct ChildCreationCover: View {
+    @EnvironmentObject var vm: NotesViewModel
+    let parent: Notes
+
+    var body: some View {
+        NoteCreationView(
+            onSave: { title, body, tag in
+                let trimmedTag = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+                let child = Notes(
+                    id: UUID(),
+                    title: title,
+                    body: body,
+                    parentId: parent.id,
+                    children: [],
+                    lastUpdated: Date(),
+                    userID: 0,
+                    colorHex: parent.colorHex ?? "#007BFF",
+                    tag: trimmedTag.isEmpty ? (parent.tag ?? "") : tag
+                )
+                vm.add(child)
+            },
+            existingTags: vm.getTags(),
+            initialTag: parent.tag ?? ""
+        )
     }
 }
 
@@ -153,7 +233,8 @@ struct ModalPreference: View {
     }
 
     private var possibleParents: [Notes] {
-        vm.notes.filter { $0.id != note.id }
+        let banned = vm.descendantIds(of: note.id).union([note.id])
+        return vm.notes.filter { !banned.contains($0.id) }
     }
 
     var body: some View {
@@ -179,9 +260,14 @@ struct ModalPreference: View {
                         get: { note.parentId },
                         set: { newParentId in
                             note.parentId = newParentId
+                            if let pid = newParentId, let parent = vm.notes.first(where: { $0.id == pid }) {
+                                note.colorHex = parent.colorHex ?? note.colorHex
+                                note.tag = parent.tag ?? note.tag
+                            }
                             vm.update(note)
                         }
                     )) {
+                        Text("None").tag(UUID?.none)
                         ForEach(possibleParents) { parent in
                             Text(parent.title).tag(Optional(parent.id))
                         }
@@ -316,6 +402,12 @@ struct NoteCreationView: View {
     var onSave: (String, String, String) -> Void
     var existingTags : [String]
     @State private var showDropdown = false
+
+    init(onSave: @escaping (String, String, String) -> Void, existingTags: [String], initialTag: String = "") {
+        self.onSave = onSave
+        self.existingTags = existingTags
+        _tag = State(initialValue: initialTag)
+    }
 
 
 

@@ -93,7 +93,7 @@ class SyncEngine {
         do {
             try await postgres.update(
                 noteId: note.id.uuidString, title: note.title, noteBody: note.body,
-                noteParent: note.parentId?.uuidString, noteColor: note.colorHex, tag: note.tag
+                noteParent: note.parentId?.uuidString ?? "", noteColor: note.colorHex, tag: note.tag
             )
             return true
         } catch { print("Postgres update failed:", error); return false }

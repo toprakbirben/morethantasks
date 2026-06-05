@@ -172,7 +172,7 @@ class SQLiteDatabase {
         UPDATE notes
         SET title = COALESCE(?, title),
             body = COALESCE(?, body),
-            parent_id = COALESCE(?, parent_id),
+            parent_id = ?,
             color = COALESCE(?, color),
             tag = COALESCE(?, tag),
             last_updated = ?

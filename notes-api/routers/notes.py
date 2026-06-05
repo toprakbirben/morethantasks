@@ -56,13 +56,14 @@ def update_note(note_id: str, note: NoteUpdate):
             SET title = COALESCE(%s, title),
                 body = COALESCE(%s, body),
                 color = COALESCE(%s, color),
-                parent_id = COALESCE(%s, parent_id),
+                parent_id = CASE WHEN %s IS NULL THEN parent_id ELSE NULLIF(%s, '') END,
                 tag = COALESCE(%s, tag),
                 deleted = false,
                 last_updated = %s
             WHERE id = %s
             """,
-            (note.title, note.body, note.color, note.parent_id, note.tag, datetime.now(), note_id)
+            (note.title, note.body, note.color, note.parent_id, note.parent_id,
+             note.tag, datetime.now(), note_id)
         )
     conn.commit()
     return {"status": "success", "message": "Note updated"}

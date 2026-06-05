@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct RegisterView : View {
+    @Binding var selectedTab: UIComponents.Tab
     @FocusState private var focusedField: FocusedField?
     @State private var presentNextView = false
     @State private var viewStack: ViewStack = .registration
@@ -28,7 +29,7 @@ struct RegisterView : View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(!vm.isValidEmail ? .red : focusedField == .email ? Color("primary-blue"): Color.white, lineWidth: 3)
+                            .stroke(vm.emailFieldInvalid ? .red : focusedField == .email ? Color("primary-blue"): Color.white, lineWidth: 3)
                     )
                     .padding(.horizontal)
 
@@ -53,10 +54,10 @@ struct RegisterView : View {
                     Text(error)
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(.red)
-                } else {
-                    Text(vm.message ?? "")
-                        .font(.system(size: 14, weight: .medium))
                 }
+            }
+            .onChange(of: vm.didAuthenticate) { _, didAuthenticate in
+                if didAuthenticate { selectedTab = .home }
             }
             .navigationDestination(isPresented: $presentNextView) {
                 switch viewStack {
@@ -69,5 +70,5 @@ struct RegisterView : View {
 }
 
 #Preview {
-    RegisterView()
+    RegisterView(selectedTab: .constant(.welcome))
 }
