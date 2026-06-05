@@ -14,6 +14,12 @@ import Foundation
 import PostgresClientKit
 import Combine
 
+enum PostgresPushError: Error {
+    case badURL
+    case encoding
+    case server(Int)
+}
+
 class PostgresDatabase {
 
     private var configuration: PostgresClientKit.ConnectionConfiguration
@@ -92,9 +98,9 @@ class PostgresDatabase {
     // The server must INSERT with this id (ON CONFLICT (id) DO NOTHING) for
     // retries to be idempotent. See SERVER_CHANGES_REQUIRED.md.
 
-    func insert(_ note: Notes, completion: @escaping (Bool) -> Void) {
+    func insert(_ note: Notes) async throws {
         guard let url = URL(string: "\(ServerConfig.apiBaseURL)/notes") else {
-            completion(false); return
+            throw PostgresPushError.badURL
         }
 
         let noteData: [String: Any] = [
@@ -109,7 +115,7 @@ class PostgresDatabase {
         ]
 
         guard let jsonData = try? JSONSerialization.data(withJSONObject: noteData) else {
-            completion(false); return
+            throw PostgresPushError.encoding
         }
 
         var request = URLRequest(url: url)
@@ -117,18 +123,14 @@ class PostgresDatabase {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = jsonData
 
-        URLSession.shared.dataTask(with: request) { _, response, error in
-            let ok = error == nil && Self.isSuccess(response)
-            if !ok { print("Postgres insert failed:", error as Any) }
-            DispatchQueue.main.async { completion(ok) }
-        }.resume()
+        try await send(request)
     }
 
     // MARK: - Push: Update
 
-    func update(noteId: String, title: String?, noteBody: String?, noteParent: String?, noteColor: String?, tag: String?, completion: @escaping (Bool) -> Void) {
+    func update(noteId: String, title: String?, noteBody: String?, noteParent: String?, noteColor: String?, tag: String?) async throws {
         guard let url = URL(string: "\(ServerConfig.apiBaseURL)/notes/\(noteId)") else {
-            completion(false); return
+            throw PostgresPushError.badURL
         }
         var request = URLRequest(url: url)
         request.httpMethod = "PATCH"
@@ -141,34 +143,34 @@ class PostgresDatabase {
         if let noteColor = noteColor { body["color"] = noteColor }
         if let tag = tag { body["tag"] = tag }
 
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: body) else {
+            throw PostgresPushError.encoding
+        }
+        request.httpBody = jsonData
 
-        URLSession.shared.dataTask(with: request) { _, response, error in
-            let ok = error == nil && Self.isSuccess(response)
-            if !ok { print("Postgres update failed:", error as Any) }
-            DispatchQueue.main.async { completion(ok) }
-        }.resume()
+        try await send(request)
     }
 
     // MARK: - Push: Delete (server performs a soft delete / tombstone)
 
-    func delete(noteId: UUID, completion: @escaping (Bool) -> Void) {
+    func delete(noteId: UUID) async throws {
         guard let url = URL(string: "\(ServerConfig.apiBaseURL)/notes/\(noteId.uuidString)") else {
-            completion(false); return
+            throw PostgresPushError.badURL
         }
 
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
 
-        URLSession.shared.dataTask(with: request) { _, response, error in
-            let ok = error == nil && Self.isSuccess(response)
-            if !ok { print("Postgres delete failed:", error as Any) }
-            DispatchQueue.main.async { completion(ok) }
-        }.resume()
+        try await send(request)
     }
 
-    private static func isSuccess(_ response: URLResponse?) -> Bool {
-        guard let http = response as? HTTPURLResponse else { return true } // no status → assume ok
-        return (200...299).contains(http.statusCode)
+    /// Performs the request and throws unless the server returns 2xx (or no
+    /// HTTP status, which we treat as success to match prior behavior).
+    private func send(_ request: URLRequest) async throws {
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { return }
+        guard (200...299).contains(http.statusCode) else {
+            throw PostgresPushError.server(http.statusCode)
+        }
     }
 }

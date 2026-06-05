@@ -10,11 +10,9 @@ import SwiftUI
 struct LandingPage: View {
     @Binding var selectedTab: UIComponents.Tab
     @State private var searchText: String = ""
-    
-    @StateObject private var rm = ReminderManager.shared
-    @StateObject private var db = DatabaseManager.shared
 
-    
+    @StateObject private var vm = LandingViewModel()
+
     var body: some View {
         NavigationStack {
             VStack {
@@ -22,14 +20,14 @@ struct LandingPage: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         if !searchText.isEmpty {
-                            ForEach(Helper.shared.filteredNotes(searchText: searchText, notes: db.notesArray)) { note in
+                            ForEach(vm.filteredNotes(searchText: searchText)) { note in
                                 NavigationLink(
-                                    destination: NoteDetailView(note: note, tagsArray: $db.tagsArray) { updatedTitle, updatedText, updatedTag in
+                                    destination: NoteDetailView(note: note, tagsArray: .constant(vm.tags)) { updatedTitle, updatedText, updatedTag in
                                         var updatedNote = note
                                         updatedNote.title = updatedTitle
                                         updatedNote.body = updatedText
                                         updatedNote.tag = updatedTag
-                                        DatabaseManager.shared.update(note: updatedNote)
+                                        vm.update(updatedNote)
                                     }
                                 ) {
                                     UIComponents.NoteCell(note: note)
@@ -37,8 +35,8 @@ struct LandingPage: View {
                                 }
                             }
                         }
-                        TaskLookup(reminders: $rm.remindersArray)
-                        FeaturedNotes(recentNotes: $db.notesArray)
+                        TaskLookup(reminders: vm.reminders)
+                        FeaturedNotes(recentNotes: .constant(vm.notes))
                     }
                     .padding(.horizontal)
                     .padding(.top, 8)

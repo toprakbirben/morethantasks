@@ -11,12 +11,7 @@ struct RegisterView : View {
     @FocusState private var focusedField: FocusedField?
     @State private var presentNextView = false
     @State private var viewStack: ViewStack = .registration
-    @State private var message: String = ""
-    @State var emailText: String = ""
-    @State var passText: String = ""
-    @State var isValidEmail: Bool = false
-    @State var isValidPassword: Bool = false
-    @StateObject var userDB = userDatabase.shared
+    @StateObject private var vm = RegisterViewModel()
 
     var body: some View {
         NavigationStack {
@@ -24,7 +19,7 @@ struct RegisterView : View {
                 Text("Register Here")
                     .font(.system(size: 20, weight: .bold))
                     .padding(.bottom, 60)
-                TextField("Email", text: $emailText)
+                TextField("Email", text: $vm.email)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled(true)
                     .focused($focusedField, equals: .email)
@@ -33,27 +28,14 @@ struct RegisterView : View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(!isValidEmail ? .red : focusedField == .email ? Color("primary-blue"): Color.white, lineWidth: 3)
+                            .stroke(!vm.isValidEmail ? .red : focusedField == .email ? Color("primary-blue"): Color.white, lineWidth: 3)
                     )
                     .padding(.horizontal)
-                    .onChange(of: emailText) { oldValue, newValue in
-                        isValidEmail = Validator.isValidEmail(newValue)
-                    }
-                
-                UIComponents.passwordFields(passwordField: $passText)
-                    .onChange(of: passText) { oldValue, newValue in
-                        isValidPassword = Validator.isValidPassword(newValue)
-                    }
-                
+
+                UIComponents.passwordFields(passwordField: $vm.password)
+
                 Button {
-                    userDB.registerUser(email: emailText, passwordHash: passText) { success in
-                        if success {
-                            message = "Succesfully registered!"
-                        }
-                        else {
-                            message = "Failed to register!"
-                        }
-                    }
+                    Task { await vm.register() }
                 }
                 label: {
                     Text("Sign up")
@@ -62,13 +44,19 @@ struct RegisterView : View {
                 }
                 .padding(.vertical)
                 .frame(maxWidth: .infinity)
-                .background(RoundedRectangle(cornerRadius: 12).fill(isValidPassword && isValidPassword ? Color("primary-blue"): Color("primary-blue").opacity(0.6)))
+                .background(RoundedRectangle(cornerRadius: 12).fill(vm.canSubmit ? Color("primary-blue"): Color("primary-blue").opacity(0.6)))
                 .padding(.horizontal)
                 .padding(.vertical)
-                .disabled(!(isValidEmail && isValidPassword))
-                
-                Text(message)
-                    .font(.system(size: 14, weight: .medium))
+                .disabled(!vm.canSubmit || vm.isLoading)
+
+                if let error = vm.errorMessage {
+                    Text(error)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.red)
+                } else {
+                    Text(vm.message ?? "")
+                        .font(.system(size: 14, weight: .medium))
+                }
             }
             .navigationDestination(isPresented: $presentNextView) {
                 switch viewStack {
