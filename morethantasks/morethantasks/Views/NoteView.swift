@@ -376,6 +376,7 @@ struct TagSelection: View {
                         
                         Divider()
                         TextField("New tag...", text: $tag)
+                            .textInputAutocapitalization(.never)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
                             .padding(.vertical, 2)
                     }

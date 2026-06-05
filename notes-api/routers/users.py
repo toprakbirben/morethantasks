@@ -1,5 +1,4 @@
-from fastapi import APIRouter
-from passlib.hash import bcrypt
+from fastapi import APIRouter, HTTPException
 
 from db import get_conn
 from models import LoginRequest
@@ -7,47 +6,40 @@ from models import LoginRequest
 router = APIRouter()
 
 
-@router.post("/login")
-async def login(request: LoginRequest):
+@router.post("/sessions")
+async def create_session(request: LoginRequest):
     user = await login_user(request.email, request.password)
     if user:
         return {
-            "success": True,
             "user": {
                 "id": user["id"],
                 "email": user["email"]
             }
         }
-    else:
-        return {"success": False}
+    raise HTTPException(status_code=401, detail="Invalid email or password")
 
 
 async def login_user(email: str, password: str):
+    # Verify the password inside Postgres via pgcrypto: crypt() re-hashes the
+    # supplied password with the stored hash's own salt, so the comparison
+    # succeeds only on a match. Keeps verification consistent with create_user.
     conn = get_conn()
     conn.rollback()
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT id, email, password_hash FROM users WHERE email = %s",
-            (email,)
+            "SELECT id, email FROM users "
+            "WHERE email = %s AND password_hash = crypt(%s, password_hash)",
+            (email, password)
         )
         result = cur.fetchone()
         if result:
-            user_id, user_email, stored_hash = result
-            if __verify_password(password, stored_hash):
-                return {"id": user_id, "email": user_email}
+            user_id, user_email = result
+            return {"id": user_id, "email": user_email}
     return None
 
 
-def __verify_password(plain_password: str, stored_hash) -> bool:
-        try:
-            print(bcrypt.verify(plain_password, stored_hash))
-            return bcrypt.verify(plain_password, stored_hash)
-        except ValueError:
-            return False
-
-
-@router.post("/add_user")
-def add_user(req: LoginRequest):
+@router.post("/users", status_code=201)
+def create_user(req: LoginRequest):
     conn = get_conn()
     try:
         with conn.cursor() as curr:
@@ -63,32 +55,27 @@ def add_user(req: LoginRequest):
     except Exception as e:
         conn.rollback()
         print("Error creating user:", e)
-        return {"success": False}
+        raise HTTPException(status_code=409, detail="Could not create user")
 
 
-@router.delete("/delete_user")
-def delete_user(req: dict):
-    email = req.get("email")
-    if not email:
-        return {"success": False}
-
+@router.delete("/users/{user_id}", status_code=204)
+def delete_user(user_id: int):
     conn = get_conn()
     try:
         with conn.cursor() as curr:
-            curr.execute("DELETE FROM users WHERE email = %s", (email,))
-            curr.execute("DELETE FROM notes WHERE user_id = (SELECT id FROM users WHERE email = %s)", (email,))
+            # Delete the user's notes first to respect the user_id foreign key.
+            curr.execute("DELETE FROM notes WHERE user_id = %s", (user_id,))
+            curr.execute("DELETE FROM users WHERE id = %s", (user_id,))
         conn.commit()
-        return {"success": True}
+        return None
     except Exception as e:
         conn.rollback()
         print("Delete user error:", e)
-        return {"success": False}
+        raise HTTPException(status_code=500, detail="Could not delete user")
 
 
-@router.patch("/reset")
+@router.post("/users/password-reset")
 def reset_password(req: LoginRequest):
-    new_hash = bcrypt.hash(req.password)
-
     conn = get_conn()
     with conn.cursor() as cur:
         cur.execute(
@@ -98,11 +85,12 @@ def reset_password(req: LoginRequest):
         user = cur.fetchone()
 
         if not user:
-            return {"success": False, "message": "Email not found"}
+            raise HTTPException(status_code=404, detail="Email not found")
 
+        # Hash with pgcrypto (bcrypt), matching create_user and login_user.
         cur.execute(
-            "UPDATE users SET password_hash = %s WHERE email = %s",
-            (new_hash, req.email)
+            "UPDATE users SET password_hash = crypt(%s, gen_salt('bf')) WHERE email = %s",
+            (req.password, req.email)
         )
 
     conn.commit()

@@ -69,6 +69,7 @@ struct UIComponents {
                     .foregroundColor(.black)
 
                 TextField("Zoek", text: $searchText)
+                    .textInputAutocapitalization(.never)
                     .foregroundColor(.black)
 
                 if !searchText.isEmpty {
@@ -155,6 +156,7 @@ struct UIComponents {
                         SecureField("Confirm Password", text: $passwordField)
                     }
                 }
+                .textInputAutocapitalization(.never)
                 .focused($focusedField, equals: .confirmPassword)
                 .padding()
                 .background(Color("secondary-blue").opacity(0.4))

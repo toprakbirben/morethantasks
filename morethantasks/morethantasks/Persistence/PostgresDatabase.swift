@@ -20,7 +20,7 @@ class PostgresDatabase {
 
     init() {
         configuration = PostgresClientKit.ConnectionConfiguration()
-        configuration.host = "192.168.178.187"
+        configuration.host = ServerConfig.host
         configuration.port = 5432
         configuration.database = "notes"
         configuration.user = "notes"
@@ -93,7 +93,7 @@ class PostgresDatabase {
     // retries to be idempotent. See SERVER_CHANGES_REQUIRED.md.
 
     func insert(_ note: Notes, completion: @escaping (Bool) -> Void) {
-        guard let url = URL(string: "http://192.168.178.187:8000/add_note") else {
+        guard let url = URL(string: "\(ServerConfig.apiBaseURL)/notes") else {
             completion(false); return
         }
 
@@ -127,14 +127,14 @@ class PostgresDatabase {
     // MARK: - Push: Update
 
     func update(noteId: String, title: String?, noteBody: String?, noteParent: String?, noteColor: String?, tag: String?, completion: @escaping (Bool) -> Void) {
-        guard let url = URL(string: "http://192.168.178.187:8000/edit_note") else {
+        guard let url = URL(string: "\(ServerConfig.apiBaseURL)/notes/\(noteId)") else {
             completion(false); return
         }
         var request = URLRequest(url: url)
         request.httpMethod = "PATCH"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        var body: [String: Any] = ["note_id": noteId]
+        var body: [String: Any] = [:]
         if let title = title { body["title"] = title }
         if let noteBody = noteBody { body["body"] = noteBody }
         if let noteParent = noteParent { body["parent_id"] = noteParent }
@@ -153,19 +153,12 @@ class PostgresDatabase {
     // MARK: - Push: Delete (server performs a soft delete / tombstone)
 
     func delete(noteId: UUID, completion: @escaping (Bool) -> Void) {
-        guard let url = URL(string: "http://192.168.178.187:8000/remove_note") else {
-            completion(false); return
-        }
-        let noteData: [String: Any] = ["note_id": noteId.uuidString]
-
-        guard let jsonData = try? JSONSerialization.data(withJSONObject: noteData) else {
+        guard let url = URL(string: "\(ServerConfig.apiBaseURL)/notes/\(noteId.uuidString)") else {
             completion(false); return
         }
 
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = jsonData
 
         URLSession.shared.dataTask(with: request) { _, response, error in
             let ok = error == nil && Self.isSuccess(response)

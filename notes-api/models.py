@@ -19,13 +19,8 @@ class Note(BaseModel):
 
 
 class NoteUpdate(BaseModel):
-    note_id: str
     title: Optional[str] = None
     body: Optional[str] = None
     color: Optional[str] = None
     parent_id: Optional[str] = None
     tag: Optional[str] = None
-
-
-class DeleteNoteRequest(BaseModel):
-    note_id: str

@@ -25,6 +25,7 @@ struct RegisterView : View {
                     .font(.system(size: 20, weight: .bold))
                     .padding(.bottom, 60)
                 TextField("Email", text: $emailText)
+                    .textInputAutocapitalization(.never)
                     .autocorrectionDisabled(true)
                     .focused($focusedField, equals: .email)
                     .padding()
