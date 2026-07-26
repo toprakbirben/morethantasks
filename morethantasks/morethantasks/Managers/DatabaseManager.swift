@@ -196,15 +196,11 @@ class DatabaseManager: ObservableObject {
 
     private func rebuildTags() {
         let tagsSet = Set(
-            notesArray.map { note -> String in
+            notesArray.compactMap { note -> String? in
                 let trimmed = note.tag?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                return trimmed.isEmpty ? "None" : trimmed
+                return trimmed.isEmpty ? nil : trimmed
             }
         )
-        tagsArray = Array(tagsSet).sorted { a, b in
-            if a == "None" { return true }
-            if b == "None" { return false }
-            return a.localizedCaseInsensitiveCompare(b) == .orderedAscending
-        }
+        tagsArray = Array(tagsSet).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 }

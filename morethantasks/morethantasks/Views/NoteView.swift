@@ -26,7 +26,7 @@ struct NoteView: View {
                         }.fixedSize(horizontal: false, vertical: true)
 
                         NoteListView()
-                            .padding()
+                            .padding(.vertical)
                     }
 
                     NoteAdd()
@@ -89,6 +89,19 @@ struct NoteListView: View {
 
     var body: some View {
         List {
+            let untagged = vm.rootNotes(forTag: "None")
+            if !untagged.isEmpty {
+                ForEach(untagged) { root in
+                    NoteTreeRow(
+                        node: root,
+                        depth: 0,
+                        expanded: $expanded,
+                        selectedNote: $selectedNote,
+                        addChildParent: $addChildParent
+                    )
+                }
+            }
+
             ForEach(vm.tags, id: \.self) { tag in
                 Section(tag) {
                     ForEach(vm.rootNotes(forTag: tag)) { root in
@@ -153,8 +166,6 @@ struct NoteTreeRow: View {
                         .foregroundColor(.primary)
                 }
                 .buttonStyle(.plain)
-            } else {
-                Spacer().frame(width: 16)
             }
 
             NavigationLink(
@@ -179,6 +190,7 @@ struct NoteTreeRow: View {
             .buttonStyle(.plain)
         }
         .padding(.leading, CGFloat(depth) * 16)
+        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
         .listRowSeparator(.hidden)
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
@@ -325,26 +337,25 @@ struct NoteDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                TextField("Title", text: $title)
-                    .font(.largeTitle)
-                    .textInputAutocapitalization(.never)
-                    .onChange(of: title) { oldValue, newValue in
-                        onSave?(newValue, text, tag)
-                    }
-                    .bold()
-
-                Divider()
-
+            VStack(alignment: .leading, spacing: 12) {
                 TagSelection(existingTags: tagsArray, tag: $tag)
                     .onChange(of: tag) { oldValue, newValue in
                         onSave?(title, text, newValue)
                     }
 
-                TextEditor(text: $text)
+                TextField("Title", text: $title, axis: .vertical)
+                    .font(.largeTitle.bold())
                     .textInputAutocapitalization(.never)
-                    .frame(minHeight: 500)
-                    .padding()
+                    .onChange(of: title) { oldValue, newValue in
+                        onSave?(newValue, text, tag)
+                    }
+
+                TextEditor(text: $text)
+                    .font(.body)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: 400)
                     .onChange(of: text) { oldValue, newValue in
                         onSave?(title, newValue, tag)
                     }
@@ -397,11 +408,11 @@ struct NoteAdd: View {
 // MARK: - Note Creation View
 struct NoteCreationView: View {
     @Environment(\.dismiss) var dismiss
+    @State var title: String = ""
     @State var text: String = ""
     @State var tag: String = ""
     var onSave: (String, String, String) -> Void
     var existingTags : [String]
-    @State private var showDropdown = false
 
     init(onSave: @escaping (String, String, String) -> Void, existingTags: [String], initialTag: String = "") {
         self.onSave = onSave
@@ -409,20 +420,10 @@ struct NoteCreationView: View {
         _tag = State(initialValue: initialTag)
     }
 
-
-
     var body: some View {
-        VStack {
+        VStack(spacing: 0) {
             HStack {
-                Button(action: {
-                    if text.isEmpty { dismiss(); return }
-                    let lines = text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
-                    let title = lines.first.map(String.init) ?? ""
-                    let body = lines.count > 1 ? String(lines[1]) : ""
-
-                    onSave(title, body, tag)
-                    dismiss()
-                }) {
+                Button(action: save) {
                     Label("Back", systemImage: "chevron.left")
                         .font(.headline)
                 }
@@ -430,61 +431,87 @@ struct NoteCreationView: View {
             }
             .padding()
 
-            TagSelection(existingTags: existingTags, tag: $tag)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    TagSelection(existingTags: existingTags, tag: $tag)
 
+                    TextField("Title", text: $title, axis: .vertical)
+                        .font(.largeTitle.bold())
+                        .textInputAutocapitalization(.never)
 
-            TextEditor(text: $text)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled(true)
+                    TextEditor(text: $text)
+                        .font(.body)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled(true)
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 400)
+                }
                 .padding()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(.systemBackground))
-                .ignoresSafeArea(edges: .bottom)
+            }
         }
+    }
+
+    private func save() {
+        if title.isEmpty && text.isEmpty { dismiss(); return }
+        onSave(title, text, tag)
+        dismiss()
     }
 }
 
 struct TagSelection: View {
     var existingTags : [String]
-    @State var showDropdown = false
     @Binding var tag: String
 
+    @State private var showNewTagAlert = false
+    @State private var newTagName = ""
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            DisclosureGroup(
-                isExpanded: $showDropdown,
-                content: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(existingTags, id: \.self) { existingTags in
-                            Button(existingTags) {
-                                tag = existingTags
-                                showDropdown = false
-                            }
-                            .padding(.vertical, 2)
-                        }
-
-                        Divider()
-                        TextField("New tag...", text: $tag)
-                            .textInputAutocapitalization(.never)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .padding(.vertical, 2)
+        Menu {
+            ForEach(existingTags, id: \.self) { candidate in
+                Button {
+                    tag = candidate
+                } label: {
+                    if candidate == tag {
+                        Label(candidate, systemImage: "checkmark")
+                    } else {
+                        Text(candidate)
                     }
-                    .padding()
-                },
-                label: {
-                    HStack {
-                        Text(tag.isEmpty ? "Tag..." : tag)
-                            .foregroundColor(tag.isEmpty ? .secondary : .primary)
-
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(10)
                 }
-            )
+            }
+            if !existingTags.isEmpty { Divider() }
+            Button {
+                newTagName = ""
+                showNewTagAlert = true
+            } label: {
+                Label("New Tag…", systemImage: "plus")
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "tag.fill")
+                    .font(.caption2)
+                    .foregroundColor(.accentColor)
+                Text(tag.isEmpty ? "Add tag" : tag)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(tag.isEmpty ? .secondary : .primary)
+                Image(systemName: "chevron.down")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Color(.systemGray6), in: Capsule())
         }
-        .padding()
+        .alert("New Tag", isPresented: $showNewTagAlert) {
+            TextField("Tag name", text: $newTagName)
+            Button("Add", action: commitNewTag)
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    private func commitNewTag() {
+        let trimmed = newTagName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        tag = trimmed
     }
 }
 

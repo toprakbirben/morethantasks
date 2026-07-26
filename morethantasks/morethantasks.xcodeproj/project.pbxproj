@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D578A1C62E5CD8D8002660C7 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D578A1C52E5CD8D8002660C7 /* GRDB */; };
 		D578A1DF2E61EF61002660C7 /* PostgresClientKit in Frameworks */ = {isa = PBXBuildFile; productRef = D578A1DE2E61EF61002660C7 /* PostgresClientKit */; };
 		D57AE2A82EAFEF42006F45F5 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = D57AE2A72EAFEF42006F45F5 /* README.md */; };
 /* End PBXBuildFile section */
@@ -77,7 +76,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D578A1C62E5CD8D8002660C7 /* GRDB in Frameworks */,
 				D578A1DF2E61EF61002660C7 /* PostgresClientKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -143,7 +141,6 @@
 			);
 			name = morethantasks;
 			packageProductDependencies = (
-				D578A1C52E5CD8D8002660C7 /* GRDB */,
 				D578A1DE2E61EF61002660C7 /* PostgresClientKit */,
 			);
 			productName = morethantasks;
@@ -229,7 +226,6 @@
 			mainGroup = D52E3B6F2DC0E1AA007D7F2F;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				D578A1C42E5CD8D8002660C7 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
 				D578A1DD2E61EF61002660C7 /* XCRemoteSwiftPackageReference "PostgresClientKit" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -613,30 +609,17 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		D578A1C42E5CD8D8002660C7 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/groue/GRDB.swift.git";
-			requirement = {
-				branch = master;
-				kind = branch;
-			};
-		};
 		D578A1DD2E61EF61002660C7 /* XCRemoteSwiftPackageReference "PostgresClientKit" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/codewinsdotcom/PostgresClientKit.git";
 			requirement = {
-				branch = master;
-				kind = branch;
+				kind = exactVersion;
+				version = 1.5.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		D578A1C52E5CD8D8002660C7 /* GRDB */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = D578A1C42E5CD8D8002660C7 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
-			productName = GRDB;
-		};
 		D578A1DE2E61EF61002660C7 /* PostgresClientKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = D578A1DD2E61EF61002660C7 /* XCRemoteSwiftPackageReference "PostgresClientKit" */;

@@ -1,5 +1,5 @@
 {
-  "originHash" : "8a0d0b5a07808e8a9376f505f30fb7c772ae1235d5011475b3c614dd48d3ec53",
+  "originHash" : "2abe45c9c7f5bbb0bffe7e66507bcd393ecf4e65b5c4558f72be7c4760abaffe",
   "pins" : [
     {
       "identity" : "bluesocket",
@@ -20,21 +20,12 @@
       }
     },
     {
-      "identity" : "grdb.swift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/groue/GRDB.swift",
-      "state" : {
-        "branch" : "master",
-        "revision" : "3801ab9ac659d9eb57133629270e900444020e8e"
-      }
-    },
-    {
       "identity" : "postgresclientkit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/codewinsdotcom/PostgresClientKit.git",
       "state" : {
-        "branch" : "master",
-        "revision" : "c2768c8ebe708b1c5937431972c7882b33f4ea49"
+        "revision" : "356ffe0c43722f192d796300557b3b530a0baebc",
+        "version" : "1.5.0"
       }
     }
   ],
