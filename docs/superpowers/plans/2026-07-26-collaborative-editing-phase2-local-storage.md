@@ -122,7 +122,7 @@ git commit -m "feat(crdt): add per-installation site id"
 
 **Interfaces:**
 - Consumes: `RGAOp` (`type: RGAOpType`, `id: CharID`, `parentId: CharID?`, `char: String?`), `CharID` (`lamport: UInt64`, `siteId: UUID`) — from `morethantasks/morethantasks/CRDT/RGAOp.swift` and `CharID.swift`.
-- Produces: `final class CRDTStore { static let shared: CRDTStore; init(dbPath: String = "CRDTOps.sqlite"); func appendOps(_ ops: [RGAOp], noteId: UUID); func fetchOps(forNote noteId: UUID) -> [RGAOp]; func hasOps(forNote noteId: UUID) -> Bool }` — Task 5 (`CRDTNoteBodyController`) rehydrates a document via `fetchOps` and checks `hasOps` before seeding.
+- Produces: `final class CRDTStore { static let shared: CRDTStore; init(dbPath: String = "CRDTOps.sqlite"); func appendLocalOps(_ ops: [RGAOp], noteId: UUID); func applyRemoteOps(_ ops: [RGAOp], noteId: UUID); func fetchOps(forNote noteId: UUID) -> [RGAOp]; func hasOps(forNote noteId: UUID) -> Bool }` — Task 5 (`CRDTNoteBodyController`) rehydrates a document via `fetchOps` and checks `hasOps` before seeding, and calls `appendLocalOps` for locally-typed edits. `applyRemoteOps` writes only into the applied log (`note_crdt_ops`), never the outbox — it exists now so Phase 3/4's future "receive an op from the server" path has a home that can't accidentally re-queue a remote op for re-upload. Nothing calls `applyRemoteOps` in this phase; it is still unit-tested here because it's public API being shipped now.
 - `dbPath == ":memory:"` opens an isolated in-memory database (for tests); any other value resolves inside the app's Documents directory, same as `SQLiteDatabase`/`SyncQueueManager`.
 
 - [ ] **Step 1: Write the failing test**
@@ -153,7 +153,7 @@ struct CRDTStoreTests {
         let a = id(1)
         let op = RGAOp(type: .insert, id: a, parentId: nil, char: "x")
 
-        store.appendOps([op], noteId: noteId)
+        store.appendLocalOps([op], noteId: noteId)
 
         #expect(store.hasOps(forNote: noteId) == true)
         #expect(store.fetchOps(forNote: noteId) == [op])
@@ -165,8 +165,8 @@ struct CRDTStoreTests {
         let id = site()
         let op = RGAOp(type: .insert, id: id(1), parentId: nil, char: "x")
 
-        store.appendOps([op], noteId: noteId)
-        store.appendOps([op], noteId: noteId)
+        store.appendLocalOps([op], noteId: noteId)
+        store.appendLocalOps([op], noteId: noteId)
 
         #expect(store.fetchOps(forNote: noteId).count == 1)
     }
@@ -176,7 +176,7 @@ struct CRDTStoreTests {
         let noteA = UUID()
         let noteB = UUID()
         let id = site()
-        store.appendOps([RGAOp(type: .insert, id: id(1), parentId: nil, char: "a")], noteId: noteA)
+        store.appendLocalOps([RGAOp(type: .insert, id: id(1), parentId: nil, char: "a")], noteId: noteA)
 
         #expect(store.fetchOps(forNote: noteA).count == 1)
         #expect(store.fetchOps(forNote: noteB).isEmpty)
@@ -188,7 +188,7 @@ struct CRDTStoreTests {
         let id = site()
         let a = id(1); let b = id(2); let c = id(3)
         // Insert out of lamport order to prove fetch re-sorts, not just echoes insert order.
-        store.appendOps([
+        store.appendLocalOps([
             RGAOp(type: .insert, id: c, parentId: b, char: "c"),
             RGAOp(type: .insert, id: a, parentId: nil, char: "a"),
             RGAOp(type: .insert, id: b, parentId: a, char: "b"),
@@ -203,12 +203,24 @@ struct CRDTStoreTests {
         let id = site()
         let del = RGAOp(type: .delete, id: id(5), parentId: nil, char: nil)
 
-        store.appendOps([del], noteId: noteId)
+        store.appendLocalOps([del], noteId: noteId)
 
         #expect(store.fetchOps(forNote: noteId) == [del])
     }
+
+    @Test func applyRemoteOpsWritesToTheAppliedLog() {
+        let store = makeStore()
+        let noteId = UUID()
+        let op = RGAOp(type: .insert, id: site()(1), parentId: nil, char: "r")
+
+        store.applyRemoteOps([op], noteId: noteId)
+
+        #expect(store.fetchOps(forNote: noteId) == [op])
+    }
 }
 ```
+
+(Task 3 adds `fetchOutboxOps`; once that lands, it also adds a test there — `applyRemoteOpsNeverLandsInTheOutbox` — confirming `applyRemoteOps` doesn't queue for push. That assertion can't be written here because `fetchOutboxOps` doesn't exist yet in this task.)
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -317,10 +329,23 @@ final class CRDTStore {
 
     // MARK: - Applied log
 
-    func appendOps(_ ops: [RGAOp], noteId: UUID) {
+    /// A locally-typed edit or a freshly-seeded op: goes into the applied log
+    /// AND the outbox, since Phase 2 has no networking — everything reaching
+    /// this method originated on this device and needs to be pushed eventually.
+    func appendLocalOps(_ ops: [RGAOp], noteId: UUID) {
         for op in ops {
             insert(op, noteId: noteId, into: "note_crdt_ops")
             insert(op, noteId: noteId, into: "crdt_op_outbox")
+        }
+    }
+
+    /// An op received from the server (Phase 3/4): goes into the applied log
+    /// only. It must never re-enter the outbox — that would re-upload an op
+    /// the server already has. Unused until a future phase's pull path calls
+    /// it; shipped now so `appendLocalOps` never has to guess an op's origin.
+    func applyRemoteOps(_ ops: [RGAOp], noteId: UUID) {
+        for op in ops {
+            insert(op, noteId: noteId, into: "note_crdt_ops")
         }
     }
 
@@ -419,7 +444,7 @@ final class CRDTStore {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `xcodebuild test -project morethantasks/morethantasks.xcodeproj -scheme morethantasks -destination 'platform=iOS Simulator,id=9014B4C3-C29C-4903-B52F-FFADF75D2F38' -only-testing:morethantasksTests/CRDTStoreTests`
-Expected: PASS (6 tests).
+Expected: PASS (7 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -438,19 +463,19 @@ git commit -m "feat(crdt): add CRDTStore applied-op log"
 
 **Interfaces:**
 - Produces (added to `CRDTStore`): `func fetchOutboxOps(forNote noteId: UUID) -> [RGAOp]`, `func removeFromOutbox(_ ops: [RGAOp], noteId: UUID)`.
-- No consumer yet — Phase 3/4's future push loop will call these. This task only proves the outbox table can be filled (by `appendOps`, already wired in Task 2) and drained.
+- No consumer yet — Phase 3/4's future push loop will call these. This task proves the outbox table can be filled (by `appendLocalOps`, already wired in Task 2) and drained, and also proves `applyRemoteOps` (Task 2) never queues into it.
 
 - [ ] **Step 1: Write the failing test**
 
 Append to `CRDTStoreTests.swift`:
 
 ```swift
-    @Test func appendOpsAlsoLandsInTheOutbox() {
+    @Test func appendLocalOpsAlsoLandsInTheOutbox() {
         let store = makeStore()
         let noteId = UUID()
         let op = RGAOp(type: .insert, id: site()(1), parentId: nil, char: "x")
 
-        store.appendOps([op], noteId: noteId)
+        store.appendLocalOps([op], noteId: noteId)
 
         #expect(store.fetchOutboxOps(forNote: noteId) == [op])
     }
@@ -461,12 +486,23 @@ Append to `CRDTStoreTests.swift`:
         let id = site()
         let a = RGAOp(type: .insert, id: id(1), parentId: nil, char: "a")
         let b = RGAOp(type: .insert, id: id(2), parentId: id(1), char: "b")
-        store.appendOps([a, b], noteId: noteId)
+        store.appendLocalOps([a, b], noteId: noteId)
 
         store.removeFromOutbox([a], noteId: noteId)
 
         #expect(store.fetchOutboxOps(forNote: noteId) == [b])
         #expect(store.fetchOps(forNote: noteId) == [a, b])
+    }
+
+    @Test func applyRemoteOpsNeverLandsInTheOutbox() {
+        let store = makeStore()
+        let noteId = UUID()
+        let op = RGAOp(type: .insert, id: site()(1), parentId: nil, char: "r")
+
+        store.applyRemoteOps([op], noteId: noteId)
+
+        #expect(store.fetchOps(forNote: noteId) == [op])
+        #expect(store.fetchOutboxOps(forNote: noteId).isEmpty)
     }
 ```
 
@@ -504,7 +540,7 @@ Add to `CRDTStore`, near `fetchOps`/`hasOps`:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `xcodebuild test -project morethantasks/morethantasks.xcodeproj -scheme morethantasks -destination 'platform=iOS Simulator,id=9014B4C3-C29C-4903-B52F-FFADF75D2F38' -only-testing:morethantasksTests/CRDTStoreTests`
-Expected: PASS (8 tests).
+Expected: PASS (10 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -555,8 +591,8 @@ Append to `CRDTStoreTests.swift`:
         let noteId = UUID()
         let otherNoteId = UUID()
         let op = RGAOp(type: .insert, id: site()(1), parentId: nil, char: "x")
-        store.appendOps([op], noteId: noteId)
-        store.appendOps([op], noteId: otherNoteId)
+        store.appendLocalOps([op], noteId: noteId)
+        store.appendLocalOps([op], noteId: otherNoteId)
         store.setCursor(forNote: noteId, serverSeq: 7)
 
         store.deleteAll(forNote: noteId)
@@ -629,7 +665,7 @@ Add to `CRDTStore`:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `xcodebuild test -project morethantasks/morethantasks.xcodeproj -scheme morethantasks -destination 'platform=iOS Simulator,id=9014B4C3-C29C-4903-B52F-FFADF75D2F38' -only-testing:morethantasksTests/CRDTStoreTests`
-Expected: PASS (12 tests).
+Expected: PASS (14 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -647,7 +683,7 @@ git commit -m "feat(crdt): add CRDTStore cursor and per-note deletion"
 - Test: `morethantasks/morethantasksTests/CRDTNoteBodyControllerTests.swift`
 
 **Interfaces:**
-- Consumes: `CRDTStore` (Task 2-4: `appendOps`, `fetchOps`, `hasOps`), `RGADocument`/`RGAEditor`/`RGAOp` (Phase 1), `CRDTSite.id(using:)` (Task 1).
+- Consumes: `CRDTStore` (Task 2-4: `appendLocalOps`, `fetchOps`, `hasOps`), `RGADocument`/`RGAEditor`/`RGAOp` (Phase 1), `CRDTSite.id(using:)` (Task 1).
 - Produces: `final class CRDTNoteBodyController { init(noteId: UUID, initialBody: String, store: CRDTStore = .shared, siteId: UUID = CRDTSite.id()); var materializedText: String { get }; @discardableResult func applyLocalChange(from old: String, to new: String) -> String }` — Task 6 (`DatabaseManager`) and Task 7 (`NoteDetailView`) both construct this.
 
 - [ ] **Step 1: Write the failing test**
@@ -755,7 +791,7 @@ final class CRDTNoteBodyController {
 
         if existingOps.isEmpty {
             let seedOps = editor.applyLocalChange(from: "", to: initialBody)
-            if !seedOps.isEmpty { store.appendOps(seedOps, noteId: noteId) }
+            if !seedOps.isEmpty { store.appendLocalOps(seedOps, noteId: noteId) }
         }
     }
 
@@ -764,7 +800,7 @@ final class CRDTNoteBodyController {
     @discardableResult
     func applyLocalChange(from old: String, to new: String) -> String {
         let ops = editor.applyLocalChange(from: old, to: new)
-        if !ops.isEmpty { store.appendOps(ops, noteId: noteId) }
+        if !ops.isEmpty { store.appendLocalOps(ops, noteId: noteId) }
         return document.text()
     }
 }
