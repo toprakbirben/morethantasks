@@ -122,4 +122,41 @@ struct CRDTStoreTests {
         #expect(store.fetchOps(forNote: noteId) == [op])
         #expect(store.fetchOutboxOps(forNote: noteId).isEmpty)
     }
+
+    @Test func cursorDefaultsToZeroForAnUnseenNote() {
+        let store = makeStore()
+        #expect(store.cursor(forNote: UUID()) == 0)
+    }
+
+    @Test func setCursorThenReadReturnsTheStoredValue() {
+        let store = makeStore()
+        let noteId = UUID()
+        store.setCursor(forNote: noteId, serverSeq: 42)
+        #expect(store.cursor(forNote: noteId) == 42)
+    }
+
+    @Test func setCursorTwiceOverwritesRatherThanErrors() {
+        let store = makeStore()
+        let noteId = UUID()
+        store.setCursor(forNote: noteId, serverSeq: 1)
+        store.setCursor(forNote: noteId, serverSeq: 2)
+        #expect(store.cursor(forNote: noteId) == 2)
+    }
+
+    @Test func deleteAllRemovesOpsOutboxAndCursorForThatNoteOnly() {
+        let store = makeStore()
+        let noteId = UUID()
+        let otherNoteId = UUID()
+        let op = RGAOp(type: .insert, id: site()(1), parentId: nil, char: "x")
+        store.appendLocalOps([op], noteId: noteId)
+        store.appendLocalOps([op], noteId: otherNoteId)
+        store.setCursor(forNote: noteId, serverSeq: 7)
+
+        store.deleteAll(forNote: noteId)
+
+        #expect(store.fetchOps(forNote: noteId).isEmpty)
+        #expect(store.fetchOutboxOps(forNote: noteId).isEmpty)
+        #expect(store.cursor(forNote: noteId) == 0)
+        #expect(store.fetchOps(forNote: otherNoteId).count == 1)
+    }
 }

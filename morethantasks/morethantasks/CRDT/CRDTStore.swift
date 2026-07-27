@@ -222,4 +222,51 @@ final class CRDTStore {
         sqlite3_finalize(statement)
         return ops
     }
+
+    // MARK: - Cursor (unused until Phase 4's poll loop)
+
+    func cursor(forNote noteId: UUID) -> Int64 {
+        let sql = "SELECT last_seen_server_seq FROM crdt_cursor WHERE note_id = ?;"
+        var statement: OpaquePointer? = nil
+        var value: Int64 = 0
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            sqlite3_bind_text(statement, 1, (noteId.uuidString as NSString).utf8String, -1, nil)
+            if sqlite3_step(statement) == SQLITE_ROW {
+                value = sqlite3_column_int64(statement, 0)
+            }
+        }
+        sqlite3_finalize(statement)
+        return value
+    }
+
+    func setCursor(forNote noteId: UUID, serverSeq: Int64) {
+        let sql = """
+        INSERT OR REPLACE INTO crdt_cursor (note_id, last_seen_server_seq) VALUES (?, ?);
+        """
+        var statement: OpaquePointer? = nil
+        if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+            sqlite3_bind_text(statement, 1, (noteId.uuidString as NSString).utf8String, -1, nil)
+            sqlite3_bind_int64(statement, 2, serverSeq)
+            if sqlite3_step(statement) != SQLITE_DONE {
+                print("CRDTStore: failed to set cursor.")
+            }
+        }
+        sqlite3_finalize(statement)
+    }
+
+    // MARK: - Deletion (called when the note itself is deleted)
+
+    func deleteAll(forNote noteId: UUID) {
+        for table in ["note_crdt_ops", "crdt_op_outbox", "crdt_cursor"] {
+            let sql = "DELETE FROM \(table) WHERE note_id = ?;"
+            var statement: OpaquePointer? = nil
+            if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+                sqlite3_bind_text(statement, 1, (noteId.uuidString as NSString).utf8String, -1, nil)
+                if sqlite3_step(statement) != SQLITE_DONE {
+                    print("CRDTStore: failed to delete rows from \(table).")
+                }
+            }
+            sqlite3_finalize(statement)
+        }
+    }
 }
