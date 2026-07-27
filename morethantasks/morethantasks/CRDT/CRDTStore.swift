@@ -166,6 +166,26 @@ final class CRDTStore {
         return count > 0
     }
 
+    // MARK: - Outbox (drained by a future push loop — Phase 3/4)
+
+    func fetchOutboxOps(forNote noteId: UUID) -> [RGAOp] {
+        fetchRows(from: "crdt_op_outbox", noteId: noteId)
+    }
+
+    func removeFromOutbox(_ ops: [RGAOp], noteId: UUID) {
+        let sql = "DELETE FROM crdt_op_outbox WHERE op_key = ?;"
+        for op in ops {
+            var statement: OpaquePointer? = nil
+            if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+                sqlite3_bind_text(statement, 1, (opKey(noteId: noteId, id: op.id) as NSString).utf8String, -1, nil)
+                if sqlite3_step(statement) != SQLITE_DONE {
+                    print("CRDTStore: failed to remove op from outbox.")
+                }
+            }
+            sqlite3_finalize(statement)
+        }
+    }
+
     private func fetchRows(from table: String, noteId: UUID) -> [RGAOp] {
         let sql = """
         SELECT op_type, lamport, site_id, parent_lamport, parent_site_id, char

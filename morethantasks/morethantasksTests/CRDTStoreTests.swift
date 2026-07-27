@@ -87,4 +87,39 @@ struct CRDTStoreTests {
 
         #expect(store.fetchOps(forNote: noteId) == [op])
     }
+
+    @Test func appendLocalOpsAlsoLandsInTheOutbox() {
+        let store = makeStore()
+        let noteId = UUID()
+        let op = RGAOp(type: .insert, id: site()(1), parentId: nil, char: "x")
+
+        store.appendLocalOps([op], noteId: noteId)
+
+        #expect(store.fetchOutboxOps(forNote: noteId) == [op])
+    }
+
+    @Test func removeFromOutboxDropsOnlyThoseOpsFromTheOutboxNotTheAppliedLog() {
+        let store = makeStore()
+        let noteId = UUID()
+        let id = site()
+        let a = RGAOp(type: .insert, id: id(1), parentId: nil, char: "a")
+        let b = RGAOp(type: .insert, id: id(2), parentId: id(1), char: "b")
+        store.appendLocalOps([a, b], noteId: noteId)
+
+        store.removeFromOutbox([a], noteId: noteId)
+
+        #expect(store.fetchOutboxOps(forNote: noteId) == [b])
+        #expect(store.fetchOps(forNote: noteId) == [a, b])
+    }
+
+    @Test func applyRemoteOpsNeverLandsInTheOutbox() {
+        let store = makeStore()
+        let noteId = UUID()
+        let op = RGAOp(type: .insert, id: site()(1), parentId: nil, char: "r")
+
+        store.applyRemoteOps([op], noteId: noteId)
+
+        #expect(store.fetchOps(forNote: noteId) == [op])
+        #expect(store.fetchOutboxOps(forNote: noteId).isEmpty)
+    }
 }
