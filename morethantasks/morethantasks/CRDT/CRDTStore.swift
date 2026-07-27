@@ -97,10 +97,19 @@ final class CRDTStore {
 
     // MARK: - Applied log
 
-    func appendOps(_ ops: [RGAOp], noteId: UUID) {
+    func appendLocalOps(_ ops: [RGAOp], noteId: UUID) {
         for op in ops {
             insert(op, noteId: noteId, into: "note_crdt_ops")
             insert(op, noteId: noteId, into: "crdt_op_outbox")
+        }
+    }
+
+    /// Applies ops received from the server into the applied log only —
+    /// never the outbox; it exists now so a future phase's "receive an op
+    /// from the server" path can't accidentally re-queue it for re-upload.
+    func applyRemoteOps(_ ops: [RGAOp], noteId: UUID) {
+        for op in ops {
+            insert(op, noteId: noteId, into: "note_crdt_ops")
         }
     }
 

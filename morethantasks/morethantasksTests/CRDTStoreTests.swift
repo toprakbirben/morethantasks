@@ -23,7 +23,7 @@ struct CRDTStoreTests {
         let a = id(1)
         let op = RGAOp(type: .insert, id: a, parentId: nil, char: "x")
 
-        store.appendOps([op], noteId: noteId)
+        store.appendLocalOps([op], noteId: noteId)
 
         #expect(store.hasOps(forNote: noteId) == true)
         #expect(store.fetchOps(forNote: noteId) == [op])
@@ -35,8 +35,8 @@ struct CRDTStoreTests {
         let id = site()
         let op = RGAOp(type: .insert, id: id(1), parentId: nil, char: "x")
 
-        store.appendOps([op], noteId: noteId)
-        store.appendOps([op], noteId: noteId)
+        store.appendLocalOps([op], noteId: noteId)
+        store.appendLocalOps([op], noteId: noteId)
 
         #expect(store.fetchOps(forNote: noteId).count == 1)
     }
@@ -46,7 +46,7 @@ struct CRDTStoreTests {
         let noteA = UUID()
         let noteB = UUID()
         let id = site()
-        store.appendOps([RGAOp(type: .insert, id: id(1), parentId: nil, char: "a")], noteId: noteA)
+        store.appendLocalOps([RGAOp(type: .insert, id: id(1), parentId: nil, char: "a")], noteId: noteA)
 
         #expect(store.fetchOps(forNote: noteA).count == 1)
         #expect(store.fetchOps(forNote: noteB).isEmpty)
@@ -58,7 +58,7 @@ struct CRDTStoreTests {
         let id = site()
         let a = id(1); let b = id(2); let c = id(3)
         // Insert out of lamport order to prove fetch re-sorts, not just echoes insert order.
-        store.appendOps([
+        store.appendLocalOps([
             RGAOp(type: .insert, id: c, parentId: b, char: "c"),
             RGAOp(type: .insert, id: a, parentId: nil, char: "a"),
             RGAOp(type: .insert, id: b, parentId: a, char: "b"),
@@ -73,8 +73,18 @@ struct CRDTStoreTests {
         let id = site()
         let del = RGAOp(type: .delete, id: id(5), parentId: nil, char: nil)
 
-        store.appendOps([del], noteId: noteId)
+        store.appendLocalOps([del], noteId: noteId)
 
         #expect(store.fetchOps(forNote: noteId) == [del])
+    }
+
+    @Test func applyRemoteOpsWritesToTheAppliedLog() {
+        let store = makeStore()
+        let noteId = UUID()
+        let op = RGAOp(type: .insert, id: site()(1), parentId: nil, char: "r")
+
+        store.applyRemoteOps([op], noteId: noteId)
+
+        #expect(store.fetchOps(forNote: noteId) == [op])
     }
 }
