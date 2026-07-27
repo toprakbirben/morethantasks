@@ -48,16 +48,24 @@ class PostgresDatabase {
             let connection = try PostgresClientKit.Connection(configuration: configuration)
             defer { connection.close() }
 
-            let text = "SELECT id, title, body, parent_id, last_updated, user_id, color, tag, deleted FROM notes;"
+            // Section 4 "Pull-scoping change": owned notes OR notes shared via
+            // note_collaborators, so a shared note reaches the invitee's device.
+            // Only accepted invites count — a pending one shouldn't leak the
+            // note onto the invitee's device before they've said yes.
+            let text = """
+            SELECT id, title, body, parent_id, last_updated, user_id, color, tag, deleted
+            FROM notes
+            WHERE user_id = $1
+               OR id IN (SELECT note_id FROM note_collaborators WHERE user_id = $1 AND status = 'accepted');
+            """
             let statement = try connection.prepareStatement(text: text)
-            let cursor = try statement.execute()
+            let cursor = try statement.execute(parameterValues: [userId])
             defer { cursor.close() }
 
             for row in cursor {
                 let columns = try row.get().columns
                 guard let idString = try? columns[0].string(),
-                      let id = UUID(uuidString: idString),
-                      (try? columns[5].int()) == userId else { continue }
+                      let id = UUID(uuidString: idString) else { continue }
 
                 let isDeleted = (try? columns[8].bool()) ?? false
                 if isDeleted {
@@ -127,8 +135,12 @@ class PostgresDatabase {
     }
 
     // MARK: - Push: Update
+    //
+    // `body` is deliberately never sent here — once a note has a body CRDT,
+    // body is written only via CRDTSyncClient's POST /notes/{id}/crdt_ops
+    // (Section 3), so this whole-note LWW path can't clobber concurrent edits.
 
-    func update(noteId: String, title: String?, noteBody: String?, noteParent: String?, noteColor: String?, tag: String?) async throws {
+    func update(noteId: String, title: String?, noteParent: String?, noteColor: String?, tag: String?) async throws {
         guard let url = URL(string: "\(ServerConfig.apiBaseURL)/notes/\(noteId)") else {
             throw PostgresPushError.badURL
         }
@@ -138,7 +150,6 @@ class PostgresDatabase {
 
         var body: [String: Any] = [:]
         if let title = title { body["title"] = title }
-        if let noteBody = noteBody { body["body"] = noteBody }
         if let noteParent = noteParent { body["parent_id"] = noteParent }
         if let noteColor = noteColor { body["color"] = noteColor }
         if let tag = tag { body["tag"] = tag }

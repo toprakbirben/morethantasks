@@ -11,6 +11,7 @@ import Combine
 struct NoteView: View {
     @Binding var selectedTab: UIComponents.Tab
     @State private var searchText: String = ""
+    @State private var showInvites = false
 
     @StateObject private var vm = NotesViewModel()
 
@@ -32,6 +33,18 @@ struct NoteView: View {
                     NoteAdd()
                         .frame(width: 80, height: 80).position(x: geometry.size.width - 60, y: geometry.size.height - 128)
                 }
+            }
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showInvites = true
+                    } label: {
+                        Image(systemName: "envelope.badge")
+                    }
+                }
+            }
+            .sheet(isPresented: $showInvites) {
+                InvitesView()
             }
         }
         .environmentObject(vm)
@@ -323,6 +336,8 @@ struct NoteDetailView: View {
     @State var text: String
     @State var tag: String = ""
     @State private var bodyController: CRDTNoteBodyController
+    @State private var syncEngine: CRDTSyncEngine
+    @State private var showShareSheet = false
 
     var onSave: ((String, String, String) -> Void)?
 
@@ -331,6 +346,7 @@ struct NoteDetailView: View {
         self._tagsArray = tagsArray
         let controller = CRDTNoteBodyController(noteId: note.id, initialBody: note.body)
         _bodyController = State(initialValue: controller)
+        _syncEngine = State(initialValue: CRDTSyncEngine(noteId: note.id, controller: controller))
         _title = State(initialValue: note.title)
         _text = State(initialValue: controller.materializedText)
         _tag = State(initialValue: note.tag ?? "")
@@ -361,12 +377,27 @@ struct NoteDetailView: View {
                     .onChange(of: text) { oldValue, newValue in
                         let materialized = bodyController.applyLocalChange(from: oldValue, to: newValue)
                         onSave?(title, materialized, tag)
+                        syncEngine.scheduleLocalPush()
                     }
             }
             .padding()
         }
         .navigationTitle(title.isEmpty ? "Untitled" : title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showShareSheet = true
+                } label: {
+                    Image(systemName: "person.crop.circle.badge.plus")
+                }
+            }
+        }
+        .sheet(isPresented: $showShareSheet) {
+            ShareNoteSheet(noteId: note.id)
+        }
+        .onAppear { syncEngine.start() }
+        .onDisappear { syncEngine.stop() }
     }
 }
 

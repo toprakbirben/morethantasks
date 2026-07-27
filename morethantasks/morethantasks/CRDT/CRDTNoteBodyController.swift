@@ -36,4 +36,15 @@ final class CRDTNoteBodyController {
         if !ops.isEmpty { store.appendLocalOps(ops, noteId: noteId) }
         return document.text()
     }
+
+    /// Merges ops pulled from the server (Section 3's poll loop) into the
+    /// in-memory document and the applied log. Never touches the outbox —
+    /// these ops didn't originate locally.
+    @discardableResult
+    func applyRemoteOps(_ ops: [RGAOp]) -> String {
+        guard !ops.isEmpty else { return document.text() }
+        for op in ops { document.apply(op) }
+        store.applyRemoteOps(ops, noteId: noteId)
+        return document.text()
+    }
 }

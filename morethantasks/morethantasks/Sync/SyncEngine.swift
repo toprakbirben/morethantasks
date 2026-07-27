@@ -92,7 +92,7 @@ class SyncEngine {
     private func pushUpdate(_ note: Notes) async -> Bool {
         do {
             try await postgres.update(
-                noteId: note.id.uuidString, title: note.title, noteBody: note.body,
+                noteId: note.id.uuidString, title: note.title,
                 noteParent: note.parentId?.uuidString ?? "", noteColor: note.colorHex, tag: note.tag
             )
             return true

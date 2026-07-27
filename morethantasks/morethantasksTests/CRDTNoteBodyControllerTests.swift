@@ -63,4 +63,68 @@ struct CRDTNoteBodyControllerTests {
         #expect(result == "same")
         #expect(store.fetchOps(forNote: noteId).count == opCountAfterSeed)
     }
+
+    // MARK: - applyRemoteOps (Section 3 poll loop)
+    //
+    // Why it matters: remote ops must merge into the same document a
+    // concurrent local edit is building, and must never re-enter the outbox
+    // (that would echo a peer's edit straight back to the server as if it
+    // were ours).
+
+    @Test func applyRemoteOpsMergesIntoMaterializedText() {
+        let store = freshStore()
+        let noteId = UUID()
+        let controller = CRDTNoteBodyController(noteId: noteId, initialBody: "", store: store, siteId: UUID())
+        let remoteSite = UUID()
+        let op = RGAOp(type: .insert, id: CharID(lamport: 1, siteId: remoteSite), parentId: nil, char: "r")
+
+        let result = controller.applyRemoteOps([op])
+
+        #expect(result == "r")
+        #expect(controller.materializedText == "r")
+    }
+
+    @Test func applyRemoteOpsNeverLandInTheOutbox() {
+        let store = freshStore()
+        let noteId = UUID()
+        let controller = CRDTNoteBodyController(noteId: noteId, initialBody: "", store: store, siteId: UUID())
+        let remoteSite = UUID()
+        let op = RGAOp(type: .insert, id: CharID(lamport: 1, siteId: remoteSite), parentId: nil, char: "r")
+
+        controller.applyRemoteOps([op])
+
+        #expect(store.fetchOps(forNote: noteId) == [op])
+        #expect(store.fetchOutboxOps(forNote: noteId).isEmpty)
+    }
+
+    @Test func applyRemoteOpsAndLocalEditsConvergeInOneDocument() {
+        let store = freshStore()
+        let noteId = UUID()
+        let controller = CRDTNoteBodyController(noteId: noteId, initialBody: "ab", store: store, siteId: UUID())
+        let remoteSite = UUID()
+        // Remote inserts "z" after the seeded "a".
+        let seedOpsCount = store.fetchOps(forNote: noteId).count
+        let firstSeedOpId = store.fetchOps(forNote: noteId).first?.id
+        let remoteOp = RGAOp(type: .insert, id: CharID(lamport: 100, siteId: remoteSite), parentId: firstSeedOpId, char: "z")
+
+        controller.applyRemoteOps([remoteOp])
+        let afterRemote = controller.materializedText
+        let afterLocal = controller.applyLocalChange(from: afterRemote, to: afterRemote + "!")
+
+        #expect(afterRemote.contains("z"))
+        #expect(afterLocal == afterRemote + "!")
+        #expect(store.fetchOps(forNote: noteId).count == seedOpsCount + 2) // remote insert + local insert
+    }
+
+    @Test func applyRemoteOpsWithEmptyArrayIsANoOp() {
+        let store = freshStore()
+        let noteId = UUID()
+        let controller = CRDTNoteBodyController(noteId: noteId, initialBody: "same", store: store, siteId: UUID())
+        let opCountAfterSeed = store.fetchOps(forNote: noteId).count
+
+        let result = controller.applyRemoteOps([])
+
+        #expect(result == "same")
+        #expect(store.fetchOps(forNote: noteId).count == opCountAfterSeed)
+    }
 }
