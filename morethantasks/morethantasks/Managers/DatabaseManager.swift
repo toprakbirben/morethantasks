@@ -107,6 +107,7 @@ class DatabaseManager: ObservableObject {
                 self.notesArray.append(stamped)
                 self.rebuildTags()
                 self.enqueue(.insert, note: stamped)
+                _ = CRDTNoteBodyController(noteId: stamped.id, initialBody: stamped.body)
             }
         }
     }
@@ -140,6 +141,7 @@ class DatabaseManager: ObservableObject {
                 self.notesArray.removeAll { $0.id == noteId }
                 self.rebuildTags()
                 self.enqueueDelete(noteId)
+                CRDTStore.shared.deleteAll(forNote: noteId)
             }
         }
     }
