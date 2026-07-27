@@ -322,15 +322,17 @@ struct NoteDetailView: View {
     @State var title: String
     @State var text: String
     @State var tag: String = ""
-
+    @State private var bodyController: CRDTNoteBodyController
 
     var onSave: ((String, String, String) -> Void)?
 
     init(note: Notes, tagsArray: Binding<[String]>, onSave: ((String, String, String) -> Void)? = nil) {
         self.note = note
         self._tagsArray = tagsArray
+        let controller = CRDTNoteBodyController(noteId: note.id, initialBody: note.body)
+        _bodyController = State(initialValue: controller)
         _title = State(initialValue: note.title)
-        _text = State(initialValue: note.body)
+        _text = State(initialValue: controller.materializedText)
         _tag = State(initialValue: note.tag ?? "")
         self.onSave = onSave
     }
@@ -357,7 +359,8 @@ struct NoteDetailView: View {
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 400)
                     .onChange(of: text) { oldValue, newValue in
-                        onSave?(title, newValue, tag)
+                        let materialized = bodyController.applyLocalChange(from: oldValue, to: newValue)
+                        onSave?(title, materialized, tag)
                     }
             }
             .padding()
