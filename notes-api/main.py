@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from migrate import run_migrations
-from routers import notes, users
+from routers import crdt, notes, sharing, tags, users
 
 app = FastAPI()
 
@@ -14,5 +14,8 @@ except Exception as e:
 
 app.include_router(users.router)
 app.include_router(notes.router)
+app.include_router(crdt.router)
+app.include_router(sharing.router)
+app.include_router(tags.router)
 
 # uvicorn main:app --reload --host 0.0.0.0 --port 8000

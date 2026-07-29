@@ -11,7 +11,6 @@ import Combine
 struct NoteView: View {
     @Binding var selectedTab: UIComponents.Tab
     @State private var searchText: String = ""
-    @State private var showInvites = false
 
     @StateObject private var vm = NotesViewModel()
 
@@ -33,18 +32,6 @@ struct NoteView: View {
                     NoteAdd()
                         .frame(width: 80, height: 80).position(x: geometry.size.width - 60, y: geometry.size.height - 128)
                 }
-            }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showInvites = true
-                    } label: {
-                        Image(systemName: "envelope.badge")
-                    }
-                }
-            }
-            .sheet(isPresented: $showInvites) {
-                InvitesView()
             }
         }
         .environmentObject(vm)
@@ -99,9 +86,17 @@ struct NoteListView: View {
     @State private var selectedNote: Notes? = nil
     @State private var expanded: Set<UUID> = []
     @State private var addChildParent: Notes? = nil
+    @State private var shareTagName: String = ""
+    @State private var showShareTagSheet = false
+    @State private var renameTagName: String? = nil
+    @State private var renameText = ""
 
     var body: some View {
         List {
+            NavigationLink(destination: SharedTagsView()) {
+                Label("Shared Tags", systemImage: "person.2.badge.gearshape")
+            }
+
             let untagged = vm.rootNotes(forTag: "None")
             if !untagged.isEmpty {
                 ForEach(untagged) { root in
@@ -116,7 +111,7 @@ struct NoteListView: View {
             }
 
             ForEach(vm.tags, id: \.self) { tag in
-                Section(tag) {
+                Section {
                     ForEach(vm.rootNotes(forTag: tag)) { root in
                         NoteTreeRow(
                             node: root,
@@ -125,6 +120,27 @@ struct NoteListView: View {
                             selectedNote: $selectedNote,
                             addChildParent: $addChildParent
                         )
+                    }
+                } header: {
+                    HStack {
+                        Text(tag)
+                        Spacer()
+                        Menu {
+                            Button {
+                                shareTagName = tag
+                                showShareTagSheet = true
+                            } label: {
+                                Label("Share Tag", systemImage: "person.crop.circle.badge.plus")
+                            }
+                            Button {
+                                renameText = tag
+                                renameTagName = tag
+                            } label: {
+                                Label("Rename Tag", systemImage: "pencil")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                        }
                     }
                 }
             }
@@ -138,6 +154,22 @@ struct NoteListView: View {
         .fullScreenCover(item: $addChildParent) { parent in
             ChildCreationCover(parent: parent)
                 .environmentObject(vm)
+        }
+        .sheet(isPresented: $showShareTagSheet) {
+            ShareTagSheet(tagName: shareTagName)
+        }
+        .alert("Rename Tag", isPresented: Binding(
+            get: { renameTagName != nil },
+            set: { if !$0 { renameTagName = nil } }
+        )) {
+            TextField("Tag name", text: $renameText)
+            Button("Save") {
+                if let oldName = renameTagName {
+                    Task { await vm.renameTag(oldName, to: renameText) }
+                }
+                renameTagName = nil
+            }
+            Button("Cancel", role: .cancel) { renameTagName = nil }
         }
     }
 }
@@ -338,6 +370,11 @@ struct NoteDetailView: View {
     @State private var bodyController: CRDTNoteBodyController
     @State private var syncEngine: CRDTSyncEngine
     @State private var showShareSheet = false
+    // Tracks `text`'s value as of the last processed change. DateMarkerTextEditor
+    // only hands back the new value (it sets the `text` binding itself before
+    // calling onTextChange), so this is how applyLocalChange(from:to:) still
+    // gets a real "old" side of the diff.
+    @State private var lastText: String
 
     var onSave: ((String, String, String) -> Void)?
 
@@ -349,6 +386,7 @@ struct NoteDetailView: View {
         _syncEngine = State(initialValue: CRDTSyncEngine(noteId: note.id, controller: controller))
         _title = State(initialValue: note.title)
         _text = State(initialValue: controller.materializedText)
+        _lastText = State(initialValue: controller.materializedText)
         _tag = State(initialValue: note.tag ?? "")
         self.onSave = onSave
     }
@@ -368,17 +406,12 @@ struct NoteDetailView: View {
                         onSave?(newValue, text, tag)
                     }
 
-                TextEditor(text: $text)
-                    .font(.body)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled(true)
-                    .scrollContentBackground(.hidden)
-                    .frame(minHeight: 400)
-                    .onChange(of: text) { oldValue, newValue in
-                        let materialized = bodyController.applyLocalChange(from: oldValue, to: newValue)
-                        onSave?(title, materialized, tag)
-                        syncEngine.scheduleLocalPush()
-                    }
+                UIComponents.DateMarkerTextEditor(text: $text) { newValue in
+                    let materialized = bodyController.applyLocalChange(from: lastText, to: newValue)
+                    lastText = newValue
+                    onSave?(title, materialized, tag)
+                    syncEngine.scheduleLocalPush()
+                }
             }
             .padding()
         }
@@ -396,7 +429,13 @@ struct NoteDetailView: View {
         .sheet(isPresented: $showShareSheet) {
             ShareNoteSheet(noteId: note.id)
         }
-        .onAppear { syncEngine.start() }
+        .onAppear {
+            syncEngine.onRemoteTextChange = { newValue in
+                text = newValue
+                lastText = newValue
+            }
+            syncEngine.start()
+        }
         .onDisappear { syncEngine.stop() }
     }
 }
@@ -473,12 +512,7 @@ struct NoteCreationView: View {
                         .font(.largeTitle.bold())
                         .textInputAutocapitalization(.never)
 
-                    TextEditor(text: $text)
-                        .font(.body)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled(true)
-                        .scrollContentBackground(.hidden)
-                        .frame(minHeight: 400)
+                    UIComponents.DateMarkerTextEditor(text: $text)
                 }
                 .padding()
             }

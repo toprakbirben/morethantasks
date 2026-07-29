@@ -11,16 +11,27 @@ struct InvitesView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if vm.invites.isEmpty {
+                if vm.totalCount == 0 {
                     ContentUnavailableView("No Invites", systemImage: "envelope.open",
-                                            description: Text("Notes shared with you will show up here."))
+                                            description: Text("Notes and tags shared with you will show up here."))
                 } else {
                     List {
                         if let errorMessage = vm.errorMessage {
                             Text(errorMessage).foregroundColor(.red).font(.footnote)
                         }
-                        ForEach(vm.invites) { invite in
-                            row(for: invite)
+                        if !vm.invites.isEmpty {
+                            Section("Notes") {
+                                ForEach(vm.invites) { invite in
+                                    row(for: invite)
+                                }
+                            }
+                        }
+                        if !vm.tagInvites.isEmpty {
+                            Section("Tags") {
+                                ForEach(vm.tagInvites) { invite in
+                                    row(for: invite)
+                                }
+                            }
                         }
                     }
                 }
@@ -54,7 +65,30 @@ struct InvitesView: View {
                 }
                 .buttonStyle(.bordered)
             }
-            .disabled(vm.respondingTo == invite.noteId)
+            .disabled(vm.respondingTo == invite.noteId.uuidString)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func row(for invite: PendingTagInvite) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(invite.tagName)
+                .font(.headline)
+            Text("Shared by \(invite.ownerEmail)")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            HStack {
+                Button("Accept") {
+                    Task { await vm.respond(to: invite, accept: true) }
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button("Decline", role: .destructive) {
+                    Task { await vm.respond(to: invite, accept: false) }
+                }
+                .buttonStyle(.bordered)
+            }
+            .disabled(vm.respondingTo == invite.tagId)
         }
         .padding(.vertical, 4)
     }

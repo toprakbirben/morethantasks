@@ -62,7 +62,8 @@ struct UIComponents {
 
         @State private var presentNextView = false
         @State private var viewStack: ViewStack = .welcome
-        
+        @StateObject private var invitesVM = InvitesViewModel()
+
         var body: some View {
             HStack {
                 Image(systemName: "magnifyingglass")
@@ -86,7 +87,16 @@ struct UIComponents {
                     } label : {
                         Image(systemName: "person.crop.circle")
                             .foregroundColor(.black)
+                            .overlay(alignment: .topTrailing) {
+                                if invitesVM.invites.count > 0 {
+                                    Circle()
+                                        .fill(Color.red)
+                                        .frame(width: 10, height: 10)
+                                        .offset(x: 3, y: -3)
+                                }
+                            }
                     }
+                    .task { await invitesVM.loadInvites() }
                 }
             }
             .navigationDestination(isPresented: $presentNextView) {
@@ -178,6 +188,159 @@ struct UIComponents {
                     .padding(.trailing, 20),
                     alignment: .trailing
                 )
+            }
+        }
+    }
+
+    /// Shows the /date format hint while the user has typed "/date" but hasn't
+    /// finished a valid marker yet.
+    struct DateMarkerHint: View {
+        let text: String
+
+        private var isShowing: Bool {
+            text.contains("/date") && Helper.shared.parseDateMarker(from: text) == nil
+        }
+
+        var body: some View {
+            if isShowing {
+                Text("Format: /date DD-MM-YYYY  or  /date DD-MM-YYYY HH:mm")
+                    .font(.caption)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.thinMaterial, in: Capsule())
+                    .padding(.bottom, 8)
+            }
+        }
+    }
+
+    /// A note body editor that shows the /date format hint while typing, and once a
+    /// /date DD-MM-YYYY[ HH:mm] marker has been idle for a second, animates it into a
+    /// pretty "28/07/2026 14:30" display. This is a display-only animation: the stored
+    /// `text` binding (what gets saved as note.body) always holds the raw
+    /// "/date DD-MM-YYYY[ HH:mm]" form, so EventManager/ReminderManager can keep parsing
+    /// it. Moving the cursor back inside the pretty text expands it back to the raw,
+    /// editable /date command, pre-filled with the same date.
+    @MainActor
+    struct DateMarkerTextEditor: View {
+        @Binding var text: String
+        var minHeight: CGFloat = 400
+        var onTextChange: ((String) -> Void)? = nil
+
+        @State private var displayText: String
+        @State private var selection: TextSelection?
+        @State private var collapsedRange: Range<String.Index>?
+        @State private var collapsedDate: Date?
+        @State private var collapsedHasTime: Bool = false
+        @State private var collapseTask: Task<Void, Never>?
+
+        init(text: Binding<String>, minHeight: CGFloat = 400, onTextChange: ((String) -> Void)? = nil) {
+            self._text = text
+            self.minHeight = minHeight
+            self.onTextChange = onTextChange
+            self._displayText = State(initialValue: text.wrappedValue)
+        }
+
+        var body: some View {
+            ZStack(alignment: .bottom) {
+                TextEditor(text: $displayText, selection: $selection)
+                    .font(.body)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: minHeight)
+                    .onChange(of: displayText) { _, newValue in
+                        validateCollapsedRange(in: newValue)
+                        let canonical = canonicalText(from: newValue)
+                        text = canonical
+                        onTextChange?(canonical)
+                        scheduleCollapseCheck(for: newValue)
+                    }
+                    .onChange(of: selection) { _, newValue in
+                        expandIfNeeded(newSelection: newValue)
+                    }
+                    .onAppear {
+                        scheduleCollapseCheck(for: displayText)
+                    }
+
+                UIComponents.DateMarkerHint(text: displayText)
+            }
+        }
+
+        /// Reconstructs the raw "/date DD-MM-YYYY[ HH:mm]" form for storage, regardless of
+        /// whether the editor is currently showing the collapsed "28/07/2026" display.
+        private func canonicalText(from displayed: String) -> String {
+            guard let collapsedRange, let collapsedDate,
+                  collapsedRange.upperBound <= displayed.endIndex else {
+                return displayed
+            }
+            let raw = Helper.shared.rawDateMarkerText(date: collapsedDate, hasTime: collapsedHasTime)
+            return displayed.replacingCharacters(in: collapsedRange, with: raw)
+        }
+
+        /// Drops collapsed-range tracking if an edit elsewhere in the note shifted the
+        /// text so the tracked range no longer holds the pretty date we expect.
+        private func validateCollapsedRange(in currentText: String) {
+            guard let collapsedRange, let collapsedDate else { return }
+            guard collapsedRange.upperBound <= currentText.endIndex else {
+                self.collapsedRange = nil
+                self.collapsedDate = nil
+                return
+            }
+            let expected = Helper.shared.prettyDateMarkerText(date: collapsedDate, hasTime: collapsedHasTime)
+            if currentText[collapsedRange] != expected {
+                self.collapsedRange = nil
+                self.collapsedDate = nil
+            }
+        }
+
+        private func scheduleCollapseCheck(for snapshot: String) {
+            collapseTask?.cancel()
+            collapseTask = Task {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard !Task.isCancelled, displayText == snapshot else { return }
+                collapseDateMarkerIfNeeded()
+            }
+        }
+
+        private func collapseDateMarkerIfNeeded() {
+            guard collapsedRange == nil, let match = Helper.shared.findDateMarker(in: displayText) else { return }
+
+            let pretty = Helper.shared.prettyDateMarkerText(date: match.date, hasTime: match.hasTime)
+            displayText.replaceSubrange(match.range, with: pretty)
+
+            let newEnd = displayText.index(match.range.lowerBound, offsetBy: pretty.count)
+            collapsedRange = match.range.lowerBound..<newEnd
+            collapsedDate = match.date
+            collapsedHasTime = match.hasTime
+            selection = TextSelection(insertionPoint: newEnd)
+        }
+
+        private func expandIfNeeded(newSelection: TextSelection?) {
+            validateCollapsedRange(in: displayText)
+            guard let collapsedRange, let collapsedDate else { return }
+            guard let newSelection, selectionTouches(collapsedRange, newSelection) else { return }
+
+            let raw = Helper.shared.rawDateMarkerText(date: collapsedDate, hasTime: collapsedHasTime)
+            displayText.replaceSubrange(collapsedRange, with: raw)
+
+            let newCursor = displayText.index(collapsedRange.lowerBound, offsetBy: raw.count)
+            self.collapsedRange = nil
+            self.collapsedDate = nil
+            selection = TextSelection(insertionPoint: newCursor)
+        }
+
+        /// True when the cursor sits strictly inside the collapsed pretty-date text
+        /// (not merely at its edges, so placing the cursor right after typing it doesn't
+        /// immediately re-expand it).
+        private func selectionTouches(_ range: Range<String.Index>, _ selection: TextSelection) -> Bool {
+            func inside(_ point: String.Index) -> Bool {
+                range.lowerBound < point && point < range.upperBound
+            }
+            switch selection.indices {
+            case .selection(let r):
+                return inside(r.lowerBound) || inside(r.upperBound)
+            case .multiSelection(let rangeSet):
+                return rangeSet.ranges.contains { inside($0.lowerBound) || inside($0.upperBound) }
             }
         }
     }

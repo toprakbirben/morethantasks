@@ -43,33 +43,20 @@ class EventManager : ObservableObject
 
     func parseEvent(note: Notes) -> Event? {
         let text = note.body
-        let pattern = #"@(\d{2})-(\d{2})-(\d{4})"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
-        guard let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) else { return nil }
+        guard let parsed = Helper.shared.parseDateMarker(from: text) else { return nil }
 
-        let day = Int((text as NSString).substring(with: match.range(at: 1))) ?? 1
-        let month = Int((text as NSString).substring(with: match.range(at: 2))) ?? 1
-        let year = Int((text as NSString).substring(with: match.range(at: 3))) ?? 2000
-        
-        var dateComponents = DateComponents()
-        dateComponents.day = day
-        dateComponents.month = month
-        dateComponents.year = year
-        
-        guard let date = Calendar.current.date(from: dateComponents) else { return nil }
-        
         let cleanedTitle = Helper.shared.extractTitle(from: text)
-        
-        let startDate = Calendar.current.startOfDay(for: date)
-        let endDate = Calendar.current.date(byAdding: .day, value: 1, to: startDate)!
-        
-        
+        let fallbackTitle = note.title.isEmpty ? "Untitled Event" : note.title
+
+        let startDate = parsed.hasTime ? parsed.date : Calendar.current.startOfDay(for: parsed.date)
+        let endDate = Calendar.current.date(byAdding: parsed.hasTime ? .hour : .day, value: 1, to: startDate)!
+
         return Event(
             id: note.id,
-            title: cleanedTitle.isEmpty ? "Untitled Event" : cleanedTitle,
+            title: cleanedTitle.isEmpty ? fallbackTitle : cleanedTitle,
             startDate: startDate,
             endDate: endDate,
-            allDay: true,
+            allDay: !parsed.hasTime,
         )
     }
     

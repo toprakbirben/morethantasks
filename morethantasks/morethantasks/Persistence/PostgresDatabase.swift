@@ -52,11 +52,18 @@ class PostgresDatabase {
             // note_collaborators, so a shared note reaches the invitee's device.
             // Only accepted invites count — a pending one shouldn't leak the
             // note onto the invitee's device before they've said yes.
+            //
+            // Tag-shared notes are deliberately NOT included here: they're
+            // fetched on demand into a separate "Shared Tags" section
+            // (TagSharingService.fetchNotes) instead of this device's local
+            // store, so they never merge into this user's own tag groupings.
             let text = """
-            SELECT id, title, body, parent_id, last_updated, user_id, color, tag, deleted
+            SELECT notes.id, notes.title, notes.body, notes.parent_id, notes.last_updated,
+                   notes.user_id, notes.color, tags.name, notes.deleted
             FROM notes
-            WHERE user_id = $1
-               OR id IN (SELECT note_id FROM note_collaborators WHERE user_id = $1 AND status = 'accepted');
+            LEFT JOIN tags ON tags.id = notes.tag_id
+            WHERE notes.user_id = $1
+               OR notes.id IN (SELECT note_id FROM note_collaborators WHERE user_id = $1 AND status = 'accepted');
             """
             let statement = try connection.prepareStatement(text: text)
             let cursor = try statement.execute(parameterValues: [userId])

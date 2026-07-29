@@ -85,4 +85,23 @@ final class NotesViewModel: ObservableObject {
         }
         delete(id: note.id)
     }
+
+    /// Renames a tag server-side (propagating to anyone it's shared with,
+    /// see routers/tags.py's PATCH by owner+name) and updates this device's
+    /// own root notes to match -- only root notes carry a tag string.
+    func renameTag(_ oldName: String, to newName: String, tagSharing: TagSharingService? = nil) async {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != oldName else { return }
+        do {
+            try await (tagSharing ?? .shared).rename(tagName: oldName, to: trimmed)
+            for note in notes where (note.tag ?? "") == oldName {
+                var updated = note
+                updated.tag = trimmed
+                update(updated)
+            }
+        } catch {
+            // Non-fatal: matches the rest of this ViewModel's tag editing,
+            // which doesn't surface a dedicated error UI either.
+        }
+    }
 }

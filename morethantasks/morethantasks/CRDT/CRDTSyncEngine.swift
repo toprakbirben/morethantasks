@@ -20,6 +20,13 @@ final class CRDTSyncEngine {
 
     private var requesterId: Int { UserDefaults.standard.integer(forKey: "loggedInUserId") }
 
+    /// Fired on the main actor with the freshly-merged text whenever a pull
+    /// brings in ops from another site. The view sets this to push pulled
+    /// changes into its own `text` binding — without it, a collaborator's
+    /// edits land in the document/store but never reach the screen until the
+    /// user types something themselves.
+    var onRemoteTextChange: ((String) -> Void)?
+
     init(
         noteId: UUID,
         controller: CRDTNoteBodyController,
@@ -76,7 +83,8 @@ final class CRDTSyncEngine {
         do {
             let (ops, latestSeq) = try await client.pull(noteId: noteId, since: cursor, requesterId: requesterId)
             if !ops.isEmpty {
-                controller.applyRemoteOps(ops)
+                let materialized = controller.applyRemoteOps(ops)
+                onRemoteTextChange?(materialized)
             }
             // Advance the cursor only after ops are durably applied locally
             // (Section 5: "cursor integrity") — applyRemoteOps writes to

@@ -42,16 +42,16 @@ class Helper {
         
     private init() {}
 
-    func extractTitle(from text: String) -> String {
-        let pattern = #"\\@(\d{2}-\d{2}-\d{4})"#
+    static let dateMarkerPattern = #"/date (\d{2}-\d{2}-\d{4})(?: (\d{2}:\d{2}))?"#
 
-        let contextText = text.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
-        
+    func extractTitle(from text: String) -> String {
+        let contextText = text.replacingOccurrences(of: Helper.dateMarkerPattern, with: "", options: .regularExpression)
+
         let tagger = NLTagger(tagSchemes: [.lexicalClass])
         tagger.string = contextText
-        
+
         var keywords: [String] = []
-        
+
         tagger.enumerateTags(in: contextText.startIndex..<contextText.endIndex,
                              unit: .word,
                              scheme: .lexicalClass,
@@ -62,25 +62,61 @@ class Helper {
             }
             return true
         }
-        
+
         return keywords.joined(separator: " ")
     }
-    
-    func extractDate(from text: String) -> Date? {
-        let pattern = #"\\@(\d{2}-\d{2}-\d{4})"#
-        let regex = try! NSRegularExpression(pattern: pattern)
-        
+
+    struct DateMarkerMatch {
+        let range: Range<String.Index>
+        let date: Date
+        let hasTime: Bool
+    }
+
+    /// Locates a `/date DD-MM-YYYY` or `/date DD-MM-YYYY HH:mm` marker in note text,
+    /// including the range of the raw command text so callers can splice it out.
+    func findDateMarker(in text: String) -> DateMarkerMatch? {
+        let regex = try! NSRegularExpression(pattern: Helper.dateMarkerPattern)
+
         guard let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-              let range = Range(match.range(at: 1), in: text) else {
+              let fullRange = Range(match.range, in: text),
+              let dateRange = Range(match.range(at: 1), in: text) else {
             return nil
         }
-        
-        let dateString = String(text[range])
+
+        let dateString = String(text[dateRange])
+        let timeRange = Range(match.range(at: 2), in: text)
+        let hasTime = timeRange != nil
+
         let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "dd-MM-yyyy"
-        return dateFormatter.date(from: dateString)
+        dateFormatter.dateFormat = hasTime ? "dd-MM-yyyy HH:mm" : "dd-MM-yyyy"
+
+        let fullString = hasTime ? "\(dateString) \(String(text[timeRange!]))" : dateString
+        guard let date = dateFormatter.date(from: fullString) else { return nil }
+
+        return DateMarkerMatch(range: fullRange, date: date, hasTime: hasTime)
     }
-    
+
+    /// Parses a `/date DD-MM-YYYY` or `/date DD-MM-YYYY HH:mm` marker from note text.
+    /// `hasTime` is false when no time was given, meaning the caller should treat it as all-day.
+    func parseDateMarker(from text: String) -> (date: Date, hasTime: Bool)? {
+        guard let match = findDateMarker(in: text) else { return nil }
+        return (match.date, match.hasTime)
+    }
+
+    /// The collapsed, human-readable form shown once a /date marker is finished: "28/07/2026" or "28/07/2026 14:30".
+    func prettyDateMarkerText(date: Date, hasTime: Bool) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = hasTime ? "dd/MM/yyyy HH:mm" : "dd/MM/yyyy"
+        return formatter.string(from: date)
+    }
+
+    /// Reconstructs the raw, editable "/date DD-MM-YYYY[ HH:mm]" command from a previously parsed date.
+    func rawDateMarkerText(date: Date, hasTime: Bool) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = hasTime ? "dd-MM-yyyy HH:mm" : "dd-MM-yyyy"
+        return "/date " + formatter.string(from: date)
+    }
+
     func filteredNotes(searchText: String, notes : [Notes]) -> [Notes] {
         if searchText.isEmpty {
             return notes
